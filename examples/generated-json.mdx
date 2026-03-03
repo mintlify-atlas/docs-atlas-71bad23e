@@ -243,10 +243,14 @@ invariants.forEach(inv => console.log(inv));
 To generate this JSON from the UserProxy contract:
 
 ```bash
-intentspec extract example/UserProxy.sol -o UserProxy.json
+intentspec extract-natspec -f example/UserProxy.sol
 ```
 
-The output file will be created at the specified path with properly formatted JSON.
+This outputs the JSON to stdout. To save it to a file:
+
+```bash
+intentspec extract-natspec -f example/UserProxy.sol > UserProxy.json
+```
 
 ## Next Steps
 

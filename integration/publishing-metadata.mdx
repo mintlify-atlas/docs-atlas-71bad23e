@@ -174,7 +174,7 @@ For contracts with `constant` or `immutable` URI storage:
 
 ### Upgradeable Contracts
 
-For contracts with mutable URI storage (see [IIntentSpec Interface](iintentspec-interface#upgradeable-implementation)):
+For contracts with mutable URI storage (see [IIntentSpec Interface](/integration/iintentspec-interface#upgradeable-implementation)):
 
 ```solidity
 function setIntentSpecURI(string memory _newURI) external onlyOwner {
@@ -261,6 +261,6 @@ npx hardhat run scripts/deploy.js --network mainnet
 
 ## Next Steps
 
-- [Agent Discovery](agent-discovery) - How agents use your published metadata
-- [IIntentSpec Interface](iintentspec-interface) - Implement the Solidity interface
+- [Agent Discovery](/integration/agent-discovery) - How agents use your published metadata
+- [IIntentSpec Interface](/integration/iintentspec-interface) - Implement the Solidity interface
 - [CLI Workflow](/cli/workflow) - Complete workflow from annotation to deployment
