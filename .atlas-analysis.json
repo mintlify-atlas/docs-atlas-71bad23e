@@ -1,0 +1,136 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "IntentSpec",
+  "projectDescription": "Agent-readable smart contract documentation layer bridging the semantic gap between onchain logic and autonomous reasoning.",
+  "theme": "aspen",
+  "primaryColor": "#8B5CF6",
+  "lightColor": "#A78BFA",
+  "darkColor": "#6D28D9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/overview",
+              "concepts/the-problem",
+              "concepts/the-solution",
+              "concepts/semantic-safety"
+            ]
+          },
+          {
+            "group": "CLI Tool",
+            "pages": [
+              "cli/overview",
+              "cli/compile-command",
+              "cli/extract-natspec-command",
+              "cli/workflow"
+            ]
+          },
+          {
+            "group": "NatSpec Tags",
+            "pages": [
+              "natspec/overview",
+              "natspec/contract-level-tags",
+              "natspec/function-level-tags",
+              "natspec/examples"
+            ]
+          },
+          {
+            "group": "Schema & Specification",
+            "pages": [
+              "schema/json-schema",
+              "schema/function-selectors",
+              "schema/validation"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": [
+              "integration/iintentspec-interface",
+              "integration/publishing-metadata",
+              "integration/agent-discovery"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/userproxy-contract",
+              "examples/annotated-contract",
+              "examples/generated-json"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "EIP Specification",
+        "groups": [
+          {
+            "group": "Standard",
+            "pages": [
+              "eip/abstract",
+              "eip/motivation",
+              "eip/specification",
+              "eip/security-considerations"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Solidity Interface",
+            "pages": [
+              "api/iintentspec"
+            ]
+          },
+          {
+            "group": "TypeScript API",
+            "pages": [
+              "api/extract-natspec",
+              "api/extract-from-content",
+              "api/types"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "CLI tool for extracting agent-readable metadata from Solidity contracts",
+    "Custom NatSpec tags for declaring function intent, preconditions, effects, and risks",
+    "Schema-compliant JSON output for machine consumption",
+    "EVM function selector generation from Solidity signatures",
+    "Support for contract-level invariants and event documentation",
+    "Onchain metadata discovery via IIntentSpec interface",
+    "Batch compilation of multiple Solidity files",
+    "Integration with IPFS and content-addressed storage"
+  ],
+  "publicApiSurface": [
+    "intentspec compile",
+    "intentspec extract-natspec",
+    "extractNatSpec(filePath)",
+    "extractFromContent(content)",
+    "IIntentSpec.getIntentSpecURI()",
+    "@custom:agent-intent",
+    "@custom:agent-precondition",
+    "@custom:agent-effect",
+    "@custom:agent-risk",
+    "@custom:agent-guidance",
+    "@custom:agent-version",
+    "@custom:agent-description",
+    "@custom:agent-invariant",
+    "@custom:agent-event"
+  ]
+}
