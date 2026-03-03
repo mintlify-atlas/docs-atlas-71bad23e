@@ -1,0 +1,206 @@
+---
+title: "extractFromContent"
+description: "Extract Intent Spec metadata from Solidity source code string"
+---
+
+## Overview
+
+The `extractFromContent()` function parses Solidity source code from a string and extracts Intent Spec metadata from NatSpec comments. This is useful when you already have the source code in memory or fetched from an API.
+
+## Function Signature
+
+```typescript
+export function extractFromContent(content: string): ExtractOutcome
+```
+
+Source: `cli/src/natspec.ts:278-330`
+
+## Parameters
+
+<ParamField path="content" type="string" required>
+  The complete Solidity source code as a string. Must contain a `contract` declaration and properly formatted NatSpec comments with `@custom:agent-*` tags.
+</ParamField>
+
+## Return Value
+
+<ResponseField name="ExtractOutcome" type="ExtractResult | ExtractError">
+  Returns either a success result with the extracted spec or an error with a reason.
+</ResponseField>
+
+### Success Response (ExtractResult)
+
+```typescript
+{
+  ok: true,
+  spec: IntentSpec
+}
+```
+
+<ResponseField name="ok" type="boolean">
+  Always `true` for successful extractions.
+</ResponseField>
+
+<ResponseField name="spec" type="IntentSpec">
+  The extracted Intent Spec object containing contract metadata, functions, events, and invariants.
+</ResponseField>
+
+### Error Response (ExtractError)
+
+```typescript
+{
+  ok: false,
+  reason: string
+}
+```
+
+<ResponseField name="ok" type="boolean">
+  Always `false` for failed extractions.
+</ResponseField>
+
+<ResponseField name="reason" type="string">
+  Human-readable error message. Currently only returns `"File does not contain a contract declaration"` when no contract is found in the source.
+</ResponseField>
+
+## How It Works
+
+The function:
+
+1. **Validates contract declaration**: Checks for `contract ContractName {` pattern
+2. **Extracts contract name**: Parses the contract identifier
+3. **Finds NatSpec blocks**: Locates all `/** ... */` comment blocks
+4. **Associates blocks with code**: Determines if each block precedes a `contract` or `function` declaration
+5. **Parses custom tags**: Extracts `@custom:agent-*` tags from NatSpec
+6. **Computes function signatures**: Calculates EVM function selectors (0x + 8 hex chars)
+
+## Usage Examples
+
+### Basic Usage
+
+```typescript
+import { extractFromContent } from "intentspec";
+
+const solidityCode = `
+pragma solidity ^0.8.0;
+
+/**
+ * @custom:agent-description A simple storage contract
+ * @custom:agent-version 1.0.0
+ */
+contract Storage {
+    uint256 public value;
+    
+    /**
+     * @custom:agent-intent Store a number in the contract
+     * @custom:agent-effect Updates the stored value
+     */
+    function store(uint256 newValue) public {
+        value = newValue;
+    }
+}
+`;
+
+const result = extractFromContent(solidityCode);
+
+if (result.ok) {
+  console.log(result.spec.contract.name); // "Storage"
+  console.log(result.spec.contract.version); // "1.0.0"
+  console.log(result.spec.functions[0].intent); // "Store a number in the contract"
+}
+```
+
+### Fetching from Etherscan API
+
+```typescript
+import { extractFromContent } from "intentspec";
+
+async function extractFromEtherscan(contractAddress: string) {
+  const apiKey = process.env.ETHERSCAN_API_KEY;
+  const url = `https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${contractAddress}&apikey=${apiKey}`;
+  
+  const response = await fetch(url);
+  const data = await response.json();
+  
+  if (data.status === "1" && data.result[0].SourceCode) {
+    const sourceCode = data.result[0].SourceCode;
+    const result = extractFromContent(sourceCode);
+    
+    if (result.ok) {
+      console.log("Extracted spec for:", result.spec.contract.name);
+      return result.spec;
+    }
+  }
+  
+  throw new Error("Failed to extract spec");
+}
+```
+
+### Processing In-Memory Modifications
+
+```typescript
+import { extractFromContent } from "intentspec";
+import { readFileSync } from "fs";
+
+let source = readFileSync("./Contract.sol", "utf-8");
+
+// Add or modify NatSpec comments programmatically
+source = source.replace(
+  /function withdraw\(/,
+  `/**
+   * @custom:agent-intent Withdraw funds from the contract
+   * @custom:agent-risk User must have sufficient balance
+   */
+  function withdraw(`
+);
+
+const result = extractFromContent(source);
+
+if (result.ok) {
+  console.log("Modified spec:", result.spec.functions);
+}
+```
+
+### Validating Contract Structure
+
+```typescript
+import { extractFromContent } from "intentspec";
+
+function hasIntentSpec(source: string): boolean {
+  const result = extractFromContent(source);
+  return result.ok && result.spec.functions.length > 0;
+}
+
+const code = `contract Empty {}`;
+console.log(hasIntentSpec(code)); // false (no functions with agent-intent)
+```
+
+## NatSpec Tags Recognized
+
+### Contract-level tags
+
+- `@custom:agent-version` - Contract version
+- `@custom:agent-description` - Contract description (also reads `@dev` and `@title`)
+- `@custom:agent-invariant` - Contract invariant (can have multiple)
+- `@custom:agent-event` - Event description in format "EventName Description text"
+
+### Function-level tags
+
+- `@custom:agent-intent` - **Required** - What the function does
+- `@custom:agent-precondition` - Conditions that must be true before execution
+- `@custom:agent-effect` - State changes the function makes
+- `@custom:agent-risk` - Potential risks or warnings
+- `@custom:agent-guidance` - Additional guidance for agents
+
+## Error Handling
+
+```typescript
+const result = extractFromContent("// Just a comment, no contract");
+
+if (!result.ok) {
+  console.error(result.reason); // "File does not contain a contract declaration"
+}
+```
+
+## Related Functions
+
+- [extractNatSpec()](/api/extract-natspec) - Extract from file path instead of string
+- [Types Reference](/api/types) - TypeScript type definitions

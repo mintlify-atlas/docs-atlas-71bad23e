@@ -1,0 +1,383 @@
+---
+title: Agent Discovery
+description: How agents discover, validate, and use Intent Spec metadata
+---
+
+Intent Spec enables autonomous agents to reason about contract behavior before executing transactions. This page explains the agent verification loop and how to build Intent Spec-aware agents.
+
+## The Agent Verification Loop
+
+The core workflow from the Intent Spec whitepaper:
+
+1. **Discover** - Fetch the Intent Spec metadata URI from the contract
+2. **Validate** - Verify the agent's goal aligns with declared function intent and preconditions
+3. **Simulate** - Run a local state simulation to confirm effects match metadata
+4. **Execute** - Sign and submit the transaction with confidence
+
+This structured verification loop reduces the "semantic gap" between what a function does and what an agent believes it will do.
+
+## Discovery: Finding the Metadata
+
+### Method 1: Call `getIntentSpecURI()` Directly
+
+If a contract implements `IIntentSpec`, agents can query it onchain:
+
+```javascript
+import { ethers } from 'ethers';
+
+const IIntentSpec = [
+  'function getIntentSpecURI() external view returns (string)'
+];
+
+async function discoverSpec(contractAddress, provider) {
+  try {
+    const contract = new ethers.Contract(contractAddress, IIntentSpec, provider);
+    const uri = await contract.getIntentSpecURI();
+    return uri; // e.g., "ipfs://Qm..."
+  } catch (error) {
+    // Contract doesn't implement IIntentSpec
+    return null;
+  }
+}
+```
+
+### Method 2: Registry Lookup (Future)
+
+A future Intent Spec registry will enable discovery without direct contract queries:
+
+```javascript
+// Future API
+const uri = await intentSpecRegistry.getSpecURI(contractAddress);
+```
+
+### Method 3: Off-Chain Index
+
+For performance, agents can maintain a local index of known contracts:
+
+```javascript
+const KNOWN_SPECS = {
+  '0x1234...': 'ipfs://QmAbc...',
+  '0x5678...': 'ipfs://QmDef...',
+};
+
+const uri = KNOWN_SPECS[contractAddress] || await discoverSpec(contractAddress, provider);
+```
+
+## Fetching and Verifying Metadata
+
+Once you have the URI, fetch and validate the content:
+
+```javascript
+import { create } from 'ipfs-http-client';
+import { CID } from 'multiformats/cid';
+import Ajv from 'ajv';
+
+async function fetchAndValidateSpec(uri) {
+  // 1. Parse URI
+  const [scheme, hash] = uri.split('://');
+  
+  // 2. Fetch content
+  let content;
+  if (scheme === 'ipfs') {
+    const ipfs = create({ url: 'https://ipfs.io' });
+    const chunks = [];
+    for await (const chunk of ipfs.cat(hash)) {
+      chunks.push(chunk);
+    }
+    content = Buffer.concat(chunks).toString();
+  } else if (scheme === 'https') {
+    const response = await fetch(uri);
+    content = await response.text();
+  }
+  
+  // 3. Verify hash for IPFS
+  if (scheme === 'ipfs') {
+    const computedCID = await computeIPFSHash(content);
+    if (computedCID !== hash) {
+      throw new Error('Content hash mismatch');
+    }
+  }
+  
+  // 4. Parse and validate against schema
+  const spec = JSON.parse(content);
+  const ajv = new Ajv();
+  const schema = await fetch('https://intentspec.collinsadi.xyz/schema.json').then(r => r.json());
+  const valid = ajv.validate(schema, spec);
+  
+  if (!valid) {
+    throw new Error(`Invalid spec: ${ajv.errorsText()}`);
+  }
+  
+  return spec;
+}
+```
+
+## Validation: Intent Matching
+
+Before executing a transaction, validate the agent's goal against the declared function intent:
+
+```javascript
+function validateIntent(userGoal, functionSpec) {
+  // Example: User wants to "withdraw 100 USDC"
+  // Function declares: "Withdraw a specific amount of ERC20 tokens to an address."
+  
+  const intentKeywords = functionSpec.intent.toLowerCase();
+  const goalKeywords = userGoal.toLowerCase();
+  
+  // Check intent alignment
+  if (goalKeywords.includes('withdraw') && intentKeywords.includes('withdraw')) {
+    // Check preconditions
+    for (const precondition of functionSpec.preconditions || []) {
+      console.log(`Precondition: ${precondition}`);
+      // Agent should verify these hold before proceeding
+      // e.g., "Caller is owner or user" -> check msg.sender
+    }
+    
+    // Check risks
+    for (const risk of functionSpec.risks || []) {
+      console.warn(`Risk: ${risk}`);
+      // e.g., "Irreversible transfer" -> prompt user for confirmation
+    }
+    
+    return true;
+  }
+  
+  return false;
+}
+```
+
+### Real Example: UserProxy Withdrawal
+
+Given this Intent Spec function:
+
+```json
+{
+  "name": "withdrawERC20",
+  "intent": "Withdraw a specific amount of ERC20 tokens to an address.",
+  "signature": "0x1234abcd",
+  "preconditions": [
+    "Caller is owner or user.",
+    "token and to are non-zero; amount > 0 and balance sufficient."
+  ],
+  "effects": [
+    "Balance of this contract decreases; to receives tokens. Emits TokensWithdrawn."
+  ],
+  "risks": ["Irreversible transfer."]
+}
+```
+
+Agent validation logic:
+
+```javascript
+async function validateWithdrawal(contract, spec, params) {
+  const { token, to, amount } = params;
+  const fnSpec = spec.functions.find(f => f.name === 'withdrawERC20');
+  
+  // Check preconditions
+  const caller = await signer.getAddress();
+  const owner = await contract.owner();
+  const user = await contract.user();
+  
+  if (caller !== owner && caller !== user) {
+    throw new Error('Precondition failed: Caller must be owner or user');
+  }
+  
+  if (token === ethers.constants.AddressZero || to === ethers.constants.AddressZero) {
+    throw new Error('Precondition failed: token and to must be non-zero');
+  }
+  
+  if (amount.lte(0)) {
+    throw new Error('Precondition failed: amount must be > 0');
+  }
+  
+  const tokenContract = new ethers.Contract(token, ['function balanceOf(address) view returns (uint256)'], provider);
+  const balance = await tokenContract.balanceOf(contract.address);
+  
+  if (balance.lt(amount)) {
+    throw new Error('Precondition failed: Insufficient balance');
+  }
+  
+  // All preconditions met
+  return true;
+}
+```
+
+## Simulation: State Change Verification
+
+Use the `effects` field to verify simulation results:
+
+```javascript
+async function simulateAndVerify(contract, fnSpec, params) {
+  // Fork current state
+  const provider = new ethers.providers.JsonRpcProvider('http://localhost:8545');
+  
+  // Simulate transaction (using Tenderly, Hardhat, or Foundry)
+  const simulationResult = await provider.send('eth_call', [
+    {
+      to: contract.address,
+      from: await signer.getAddress(),
+      data: contract.interface.encodeFunctionData('withdrawERC20', [params.token, params.to, params.amount])
+    },
+    'latest'
+  ]);
+  
+  // Check declared effects
+  // "Balance of this contract decreases; to receives tokens."
+  
+  const balanceBefore = await getTokenBalance(contract.address, params.token);
+  
+  // Execute in simulation
+  await contract.connect(signer).withdrawERC20(params.token, params.to, params.amount);
+  
+  const balanceAfter = await getTokenBalance(contract.address, params.token);
+  const recipientBalanceAfter = await getTokenBalance(params.to, params.token);
+  
+  // Verify effects match
+  if (!balanceAfter.eq(balanceBefore.sub(params.amount))) {
+    throw new Error('Effect mismatch: Contract balance did not decrease by amount');
+  }
+  
+  console.log('Simulation verified: Effects match Intent Spec');
+}
+```
+
+## Complete Agent Implementation
+
+Here's a full example agent that uses Intent Spec:
+
+```javascript
+import { ethers } from 'ethers';
+
+class IntentSpecAgent {
+  constructor(provider, signer) {
+    this.provider = provider;
+    this.signer = signer;
+    this.specCache = new Map();
+  }
+  
+  async execute(contractAddress, functionName, params, userGoal) {
+    console.log(`Goal: ${userGoal}`);
+    
+    // 1. Discover spec
+    const spec = await this.getSpec(contractAddress);
+    if (!spec) {
+      console.warn('No Intent Spec found; proceeding with caution');
+      return this.executeFallback(contractAddress, functionName, params);
+    }
+    
+    // 2. Find function in spec
+    const fnSpec = spec.functions.find(f => f.name === functionName);
+    if (!fnSpec) {
+      throw new Error(`Function ${functionName} not in Intent Spec`);
+    }
+    
+    console.log(`Intent: ${fnSpec.intent}`);
+    
+    // 3. Validate intent alignment
+    if (!this.intentMatches(userGoal, fnSpec.intent)) {
+      throw new Error('Goal does not match function intent');
+    }
+    
+    // 4. Check invariants
+    for (const invariant of spec.invariants || []) {
+      console.log(`Invariant: ${invariant}`);
+    }
+    
+    // 5. Verify preconditions
+    await this.checkPreconditions(contractAddress, fnSpec, params);
+    
+    // 6. Warn about risks
+    for (const risk of fnSpec.risks || []) {
+      console.warn(`⚠️  Risk: ${risk}`);
+    }
+    
+    // 7. Apply agent guidance
+    if (fnSpec.agentGuidance) {
+      console.log(`Guidance: ${fnSpec.agentGuidance}`);
+      // e.g., "Simulate first; check role revocation in recent blocks."
+      await this.simulate(contractAddress, functionName, params);
+    }
+    
+    // 8. Execute
+    console.log('All checks passed. Executing transaction...');
+    const contract = new ethers.Contract(contractAddress, this.getABI(functionName, params), this.signer);
+    const tx = await contract[functionName](...Object.values(params));
+    await tx.wait();
+    
+    console.log(`Transaction confirmed: ${tx.hash}`);
+    return tx;
+  }
+  
+  async getSpec(contractAddress) {
+    if (this.specCache.has(contractAddress)) {
+      return this.specCache.get(contractAddress);
+    }
+    
+    const uri = await discoverSpec(contractAddress, this.provider);
+    if (!uri) return null;
+    
+    const spec = await fetchAndValidateSpec(uri);
+    this.specCache.set(contractAddress, spec);
+    return spec;
+  }
+  
+  intentMatches(goal, declaredIntent) {
+    // Simple keyword matching; production agents use LLM semantic similarity
+    const goalTokens = goal.toLowerCase().split(/\s+/);
+    const intentTokens = declaredIntent.toLowerCase().split(/\s+/);
+    const overlap = goalTokens.filter(t => intentTokens.includes(t)).length;
+    return overlap / goalTokens.length > 0.5;
+  }
+  
+  async checkPreconditions(contractAddress, fnSpec, params) {
+    // Implementation depends on specific preconditions
+    // This would parse precondition strings and verify onchain state
+    console.log('Checking preconditions...');
+    for (const precondition of fnSpec.preconditions || []) {
+      console.log(`  ✓ ${precondition}`);
+    }
+  }
+  
+  async simulate(contractAddress, functionName, params) {
+    console.log('Running simulation...');
+    // Use Tenderly, Hardhat mainnet fork, or Foundry --fork-url
+  }
+  
+  // Fallback for contracts without Intent Spec
+  async executeFallback(contractAddress, functionName, params) {
+    console.log('Executing without Intent Spec (risk: semantic drift)');
+    // Standard ABI-based execution
+  }
+}
+
+// Usage
+const agent = new IntentSpecAgent(provider, signer);
+await agent.execute(
+  '0xUserProxyAddress',
+  'withdrawERC20',
+  { token: '0xUSDC', to: '0xRecipient', amount: ethers.utils.parseUnits('100', 6) },
+  'Withdraw 100 USDC from the proxy to my wallet'
+);
+```
+
+## Key Benefits for Agents
+
+1. **Reduced ambiguity**: Functions like `exec()` become interpretable via declared intent
+2. **Safety boundaries**: `risks` field alerts agents to irreversible or high-impact actions
+3. **Precondition checking**: Agents verify requirements before signing, reducing reverts
+4. **Effect verification**: Simulation results can be compared against `effects` array
+5. **Guidance integration**: `agentGuidance` provides protocol-specific best practices
+
+## Semantic Safety Frontier
+
+From the Intent Spec whitepaper:
+
+> Agents today perform a translation: `T(ABI, Bytecode) → IntentEstimated`. Because the ABI is sparse, estimation variance is high, leading to **agentic drift**. Intent Spec introduces a structured **verification loop**: discover metadata, validate declared intent against the goal, and correlate simulation state changes with expected outcomes.
+
+By anchoring agent reasoning to developer-declared semantics, Intent Spec reduces the probability of "failures of intent" - cases where an agent executes a transaction that is technically valid but semantically misaligned with the user's goal.
+
+## Next Steps
+
+- [IIntentSpec Interface](iintentspec-interface) - Implement the interface in your contracts
+- [Publishing Metadata](publishing-metadata) - Upload specs to IPFS
+- [JSON Schema](/schema/json-schema) - Full Intent Spec JSON schema

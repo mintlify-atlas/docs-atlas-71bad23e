@@ -1,0 +1,266 @@
+---
+title: Publishing Metadata
+description: Upload Intent Spec JSON to IPFS and expose URIs onchain
+---
+
+After generating your Intent Spec JSON, you need to publish it to a permanent, accessible location. This guide covers IPFS upload, URI patterns, and best practices.
+
+## Publishing Workflow
+
+1. **Generate** the Intent Spec JSON using the CLI
+2. **Upload** to IPFS or another content-addressed storage
+3. **Obtain** the content hash (CID)
+4. **Implement** `IIntentSpec` with the URI
+5. **Deploy** your contract with the embedded URI
+
+## IPFS Upload Methods
+
+### Option 1: Pinata (Recommended)
+
+[Pinata](https://pinata.cloud) is a popular IPFS pinning service with a generous free tier.
+
+```bash
+# Generate your spec
+npx intentspec compile
+
+# Upload to Pinata via CLI (requires pinata CLI)
+pinata upload file intentspec/MyContract.json
+```
+
+Or use the Pinata web interface:
+
+1. Go to [app.pinata.cloud](https://app.pinata.cloud)
+2. Click "Upload" → "File"
+3. Select your `intentspec/MyContract.json`
+4. Copy the CID (e.g., `QmYourHashHere`)
+
+### Option 2: Web3.Storage
+
+[Web3.Storage](https://web3.storage) offers free decentralized storage backed by Filecoin.
+
+```bash
+# Install w3 CLI
+npm install -g @web3-storage/w3cli
+
+# Authenticate
+w3 login your@email.com
+
+# Upload your spec
+w3 up intentspec/MyContract.json
+```
+
+The CLI returns a CID: `bafybeiabc123...`
+
+### Option 3: Kubo (Local IPFS Node)
+
+For maximum decentralization, run your own IPFS node:
+
+```bash
+# Install IPFS (macOS)
+brew install ipfs
+
+# Initialize and start daemon
+ipfs init
+ipfs daemon &
+
+# Add your spec
+ipfs add intentspec/MyContract.json
+
+# Returns: added QmYourHash MyContract.json
+```
+
+**Important**: Pin your content and consider using a remote pinning service to ensure availability:
+
+```bash
+ipfs pin add QmYourHash
+```
+
+### Option 4: Hardhat/Foundry Script
+
+Automate publishing in your deployment pipeline:
+
+```javascript
+// scripts/deploy-with-spec.js (Hardhat)
+const { create } = require('ipfs-http-client');
+const fs = require('fs');
+
+async function main() {
+  // Upload to IPFS
+  const ipfs = create({ url: 'https://ipfs.infura.io:5001' });
+  const specJSON = fs.readFileSync('intentspec/MyContract.json');
+  const { cid } = await ipfs.add(specJSON);
+  
+  console.log(`Intent Spec uploaded: ipfs://${cid}`);
+  
+  // Deploy contract with CID
+  const MyContract = await ethers.getContractFactory('MyContract');
+  const contract = await MyContract.deploy(`ipfs://${cid}`);
+  
+  console.log(`Contract deployed: ${contract.address}`);
+}
+
+main();
+```
+
+## URI Patterns
+
+### IPFS URIs
+
+**Standard format** (recommended):
+```
+ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o
+```
+
+**With CIDv1** (newer, case-insensitive):
+```
+ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi
+```
+
+**Gateway URL** (not recommended for `getIntentSpecURI()`):
+```
+https://ipfs.io/ipfs/QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o
+```
+
+Use the `ipfs://` scheme in your contract. Agents can resolve it via their preferred gateway.
+
+### Arweave URIs
+
+For permanent storage with upfront payment:
+```
+ar://abc123TransactionIdHere
+```
+
+### HTTPS URIs
+
+For centralized hosting (less recommended):
+```
+https://metadata.myprotocol.com/specs/v1/MyContract.json
+```
+
+**Trade-offs**: Mutable, requires trust in domain owner, but may be easier for rapid iteration during development.
+
+## Content Verification
+
+Agents should verify the fetched JSON matches the hash:
+
+```javascript
+// Agent verification pseudocode
+const uri = await contract.getIntentSpecURI();
+// "ipfs://Qm..."
+
+const content = await fetchFromIPFS(uri);
+const hash = computeCID(content);
+
+if (hash !== extractCIDFromURI(uri)) {
+  throw new Error('Content hash mismatch');
+}
+
+const spec = JSON.parse(content);
+// Now safe to use spec.functions, spec.invariants, etc.
+```
+
+## Updating Metadata
+
+### Immutable Contracts
+
+For contracts with `constant` or `immutable` URI storage:
+
+1. Generate new spec version
+2. Upload to IPFS (new CID)
+3. **Deploy new contract** with updated URI
+4. Migrate users/liquidity to new contract
+
+**Best for**: Production contracts where immutability is critical.
+
+### Upgradeable Contracts
+
+For contracts with mutable URI storage (see [IIntentSpec Interface](iintentspec-interface#upgradeable-implementation)):
+
+```solidity
+function setIntentSpecURI(string memory _newURI) external onlyOwner {
+    intentSpecURI = _newURI;
+    emit IntentSpecURIUpdated(_newURI);
+}
+```
+
+1. Generate updated spec
+2. Upload to IPFS (new CID)
+3. Call `setIntentSpecURI("ipfs://newCID")` via governance/multisig
+
+**Best for**: Evolving protocols, beta deployments.
+
+**Warning**: Agents should monitor `IntentSpecURIUpdated` events and re-validate metadata before executing transactions.
+
+## Metadata Discovery Registry (Future)
+
+The Intent Spec roadmap includes a discovery registry contract:
+
+```solidity
+// Future: IntentSpecRegistry.sol
+interface IIntentSpecRegistry {
+    function registerContract(address contractAddr, string calldata uri) external;
+    function getSpecURI(address contractAddr) external view returns (string memory);
+}
+```
+
+This would enable:
+- Centralized indexing for agents
+- Verification of publisher identity
+- Historical spec versioning
+
+Until then, agents discover specs by calling `IIntentSpec.getIntentSpecURI()` directly on target contracts.
+
+## Example: Full Publishing Flow
+
+```bash
+# 1. Annotate your contract with NatSpec tags
+cat > contracts/VaultStrategy.sol << 'EOF'
+/**
+ * @custom:agent-version 2.0
+ * @custom:agent-description Automated yield farming strategy with configurable risk.
+ */
+contract VaultStrategy is IIntentSpec {
+    string private constant SPEC_URI = "ipfs://PLACEHOLDER";
+    
+    function getIntentSpecURI() external pure returns (string memory) {
+        return SPEC_URI;
+    }
+    
+    /**
+     * @custom:agent-intent Deposits assets into the vault and starts earning yield.
+     * @custom:agent-precondition Amount > 0 and caller has sufficient balance.
+     * @custom:agent-effect Assets locked; vault shares minted to caller.
+     * @custom:agent-risk Funds subject to smart contract risk and market volatility.
+     */
+    function deposit(uint256 amount) external { ... }
+}
+EOF
+
+# 2. Generate Intent Spec
+npx intentspec compile
+# Created: intentspec/VaultStrategy.json
+
+# 3. Upload to IPFS
+ipfs add intentspec/VaultStrategy.json
+# added QmYourActualHashHere VaultStrategy.json
+
+# 4. Update contract with real CID
+sed -i 's/PLACEHOLDER/QmYourActualHashHere/' contracts/VaultStrategy.sol
+
+# 5. Deploy
+npx hardhat run scripts/deploy.js --network mainnet
+```
+
+## Best Practices
+
+- **Pin your uploads**: Use a pinning service or multiple nodes to ensure availability
+- **Version your specs**: Include `contract.version` in your JSON; increment on breaking changes
+- **Immutable by default**: Prefer `constant`/`immutable` URIs for production
+- **Validate before deploy**: Fetch your uploaded spec and verify it parses correctly
+- **Monitor accessibility**: Set up monitoring to ensure your IPFS content remains retrievable
+
+## Next Steps
+
+- [Agent Discovery](agent-discovery) - How agents use your published metadata
+- [IIntentSpec Interface](iintentspec-interface) - Implement the Solidity interface
+- [CLI Workflow](/cli/workflow) - Complete workflow from annotation to deployment

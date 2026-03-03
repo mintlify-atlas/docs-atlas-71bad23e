@@ -1,0 +1,487 @@
+---
+title: Installation
+description: Install IntentSpec CLI globally, as a dev dependency, or run with npx
+---
+
+# Installation
+
+The IntentSpec CLI is published as the [intentspec](https://www.npmjs.com/package/intentspec) npm package. Choose the installation method that best fits your workflow.
+
+## Requirements
+
+- **Node.js** ≥ 18
+- npm, yarn, or pnpm
+
+<Info>
+  The CLI is a zero-dependency binary (dependencies are bundled). It works in any Node.js ≥ 18 environment.
+</Info>
+
+## Installation Methods
+
+### Option 1: npx (Recommended)
+
+Run the CLI without installing it globally. This is the **recommended** approach for most users.
+
+```bash
+npx intentspec compile
+npx intentspec extract-natspec --file contracts/MyContract.sol
+```
+
+**Advantages:**
+- No installation required
+- Always uses the latest version
+- No global namespace pollution
+- Works in any directory
+
+**Best for:**
+- Quick one-off usage
+- CI/CD pipelines
+- Trying out IntentSpec
+
+---
+
+### Option 2: Global Installation
+
+Install the CLI globally to use it anywhere on your system.
+
+<CodeGroup>
+
+```bash npm
+npm install -g intentspec
+```
+
+```bash yarn
+yarn global add intentspec
+```
+
+```bash pnpm
+pnpm add -g intentspec
+```
+
+</CodeGroup>
+
+After installation, run from anywhere:
+
+```bash
+intentspec compile
+intentspec extract-natspec -f contracts/MyContract.sol
+```
+
+**Advantages:**
+- Shorter commands (no `npx` prefix)
+- Faster execution (no download step)
+- Available system-wide
+
+**Best for:**
+- Frequent usage across multiple projects
+- Developer tools
+
+<Tip>
+  Check the installed version with `intentspec --version`
+</Tip>
+
+---
+
+### Option 3: Dev Dependency (Project-Local)
+
+Install as a development dependency in your project.
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev intentspec
+```
+
+```bash yarn
+yarn add --dev intentspec
+```
+
+```bash pnpm
+pnpm add -D intentspec
+```
+
+</CodeGroup>
+
+Run via `npx` or in npm scripts:
+
+```bash
+npx intentspec compile
+```
+
+Add to your `package.json`:
+
+```json package.json
+{
+  "scripts": {
+    "intentspec": "intentspec compile",
+    "intentspec:watch": "intentspec compile && echo 'Specs generated'"
+  },
+  "devDependencies": {
+    "intentspec": "^0.1.1"
+  }
+}
+```
+
+Then run:
+
+```bash
+npm run intentspec
+```
+
+**Advantages:**
+- Version pinned in `package.json`
+- Reproducible builds
+- Part of project dependencies
+- Works in CI/CD without global install
+
+**Best for:**
+- Production projects
+- Team collaboration
+- CI/CD integration
+
+<Info>
+  This approach ensures all team members use the same CLI version.
+</Info>
+
+---
+
+### Option 4: Build from Source
+
+Clone the repository and build the CLI yourself.
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/collinsadi/intentspec.git
+    cd intentspec/cli
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+  
+  <Step title="Build the CLI">
+    ```bash
+    npm run build
+    ```
+    
+    This compiles TypeScript to JavaScript in `dist/`.
+  </Step>
+  
+  <Step title="Run the built CLI">
+    Option A: Run directly with Node.js
+    ```bash
+    node dist/index.js compile
+    node dist/index.js extract-natspec -f path/to/Contract.sol
+    ```
+    
+    Option B: Link globally
+    ```bash
+    npm link
+    intentspec compile
+    ```
+  </Step>
+</Steps>
+
+**Available scripts:**
+
+| Script | Description |
+|--------|-------------|
+| `npm run build` | Compile TypeScript and emit to `dist/` |
+| `npm run dev` | Watch and recompile on change |
+| `npm run start` | Run `node dist/index.js` |
+| `npm run clean` | Remove `dist/` |
+
+**Best for:**
+- Contributing to IntentSpec
+- Custom modifications
+- Understanding the implementation
+
+<Warning>
+  Building from source requires the full development environment. Most users should use npx or install from npm.
+</Warning>
+
+---
+
+## Verify Installation
+
+Check that the CLI is working:
+
+<CodeGroup>
+
+```bash npx
+npx intentspec --version
+```
+
+```bash Global
+intentspec --version
+```
+
+```bash Dev Dependency
+npx intentspec --version
+```
+
+</CodeGroup>
+
+Expected output:
+
+```
+0.1.1
+```
+
+## CLI Commands
+
+The IntentSpec CLI provides two main commands:
+
+### `compile`
+
+Scans a directory for all `.sol` files (recursively, excluding `node_modules` and `.git`), extracts Intent Spec metadata from each file that contains a contract with valid NatSpec, and writes one JSON file per contract into an **`intentspec/`** folder.
+
+**Usage:**
+
+```bash
+intentspec compile
+intentspec compile --dir /path/to/contracts
+intentspec compile -d ./src
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|--------|
+| `-d, --dir <path>` | Root directory to search for `.sol` files | Current directory (`.`) |
+
+**Behavior:**
+
+- Creates `intentspec/` in the root directory you specify
+- For each `.sol` file that has a **contract** and at least one function with `@custom:agent-intent`, writes `intentspec/<ContractName>.json`
+- Skips files that do not declare a contract or have no valid agent NatSpec
+
+**Example:**
+
+```bash
+cd my-project
+intentspec compile
+# Creates: intentspec/Token.json, intentspec/UserProxy.json, etc.
+```
+
+---
+
+### `extract-natspec`
+
+Reads a **single** Solidity file, extracts Intent Spec from it, and prints the JSON to stdout (no file written).
+
+**Usage:**
+
+```bash
+intentspec extract-natspec
+intentspec extract-natspec --file contracts/MyContract.sol
+intentspec extract-natspec -f ./src/Proxy.sol
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|--------|
+| `-f, --file <path>` | Path to the Solidity file | Built-in example path |
+
+**Example:**
+
+```bash
+intentspec extract-natspec -f contracts/UserProxy.sol | jq .
+```
+
+**Best for:**
+- Quick inspection
+- Piping into other tools
+- CI/CD validation
+- Debugging NatSpec annotations
+
+---
+
+## Integration Examples
+
+### Hardhat
+
+Add IntentSpec to your Hardhat project:
+
+```json package.json
+{
+  "scripts": {
+    "compile": "hardhat compile && intentspec compile -d ./contracts"
+  },
+  "devDependencies": {
+    "hardhat": "^2.19.0",
+    "intentspec": "^0.1.1"
+  }
+}
+```
+
+```bash
+npm run compile
+# Compiles Solidity with Hardhat, then generates IntentSpec JSON
+```
+
+---
+
+### Foundry
+
+Use IntentSpec alongside Foundry:
+
+```bash Makefile
+.PHONY: build specs
+
+build:
+	forge build
+
+specs:
+	npx intentspec compile -d ./src
+
+all: build specs
+```
+
+```bash
+make all
+# Builds contracts with Foundry, then generates specs
+```
+
+---
+
+### CI/CD (GitHub Actions)
+
+Generate and validate specs in CI:
+
+```yaml .github/workflows/intentspec.yml
+name: IntentSpec CI
+
+on: [push, pull_request]
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Generate IntentSpec
+        run: npx intentspec compile -d ./contracts
+      
+      - name: Upload specs as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: intentspec-json
+          path: intentspec/
+      
+      - name: Validate JSON schema
+        run: |
+          for file in intentspec/*.json; do
+            npx ajv validate -s schema/intentspec.schema.json -d "$file"
+          done
+```
+
+---
+
+### Pre-commit Hook
+
+Regenerate specs before every commit:
+
+```bash .husky/pre-commit
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+npx intentspec compile
+git add intentspec/
+```
+
+<Tip>
+  Use [Husky](https://typicode.github.io/husky/) to manage git hooks easily.
+</Tip>
+
+---
+
+## Troubleshooting
+
+### `npx intentspec` not found
+
+**Cause:** Node.js or npm is not installed.
+
+**Solution:**
+```bash
+node --version  # Should be ≥ 18
+npm --version
+```
+
+Install Node.js from [nodejs.org](https://nodejs.org/).
+
+---
+
+### No output files generated
+
+**Cause:** Your `.sol` files don't have contracts with `@custom:agent-intent` tags.
+
+**Solution:**
+1. Add `@custom:agent-intent` to at least one function
+2. Ensure the tag is in a `/** ... */` block comment directly above the function
+3. Run `intentspec compile` again
+
+---
+
+### Permission denied (global install)
+
+**Cause:** npm doesn't have permission to install globally.
+
+**Solution:**
+```bash
+sudo npm install -g intentspec
+```
+
+Or configure npm to use a user-writable prefix:
+```bash
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+export PATH=~/.npm-global/bin:$PATH
+npm install -g intentspec
+```
+
+---
+
+### Module not found (build from source)
+
+**Cause:** Dependencies not installed or build not run.
+
+**Solution:**
+```bash
+cd cli
+npm install
+npm run build
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Generate your first intentspec.json file
+  </Card>
+  
+  <Card title="Example Contract" icon="code" href="https://github.com/collinsadi/intentspec/blob/main/example/UserProxy.sol">
+    View a fully annotated Solidity contract
+  </Card>
+</CardGroup>
+
+---
+
+## Resources
+
+- **npm package:** [npmjs.com/package/intentspec](https://www.npmjs.com/package/intentspec)
+- **GitHub repository:** [github.com/collinsadi/intentspec](https://github.com/collinsadi/intentspec)
+- **Website:** [intentspec.collinsadi.xyz](https://intentspec.collinsadi.xyz)
+- **ERC Pull Request:** [ethereum/ERCs #1557](https://github.com/ethereum/ERCs/pull/1557)

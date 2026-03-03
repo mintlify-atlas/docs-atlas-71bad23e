@@ -1,0 +1,312 @@
+---
+title: How IntentSpec Solves It
+description: A metadata standard and tooling for agent-readable contract documentation
+---
+
+## The IntentSpec Approach
+
+IntentSpec provides a **metadata standard** and **tooling** so a contract's semantic intent lives in one place and is machine-readable.
+
+Instead of forcing agents to guess intent from sparse ABIs, IntentSpec enables developers to **declare once** and agents to **verify always**.
+
+## The Three Pillars
+
+<Steps>
+  <Step title="Declare Once">
+    Annotate your Solidity with `@custom:agent-*` NatSpec tags. The CLI extracts these annotations and emits schema-strict JSON containing:
+    
+    - **Intent** - What the function accomplishes
+    - **Preconditions** - What must be true before calling
+    - **Effects** - What state changes occur
+    - **Risks** - What can go wrong
+    - **Agent Guidance** - Specific instructions for autonomous systems
+  </Step>
+  
+  <Step title="Publish & Point">
+    Host the generated spec at a stable URI (e.g., IPFS). Implement `IIntentSpec` and return that URI from `getIntentSpecURI()` so agents can resolve it onchain.
+  </Step>
+  
+  <Step title="Agent Loop">
+    Agents **discover** the spec, **validate** their goal against declared intent and preconditions, and **simulate** locally to confirm state changes match the metadata before signing.
+  </Step>
+</Steps>
+
+## From Estimation to Verification
+
+Without IntentSpec, agents must estimate:
+
+```
+T(ABI, Bytecode) → Intent_Estimated
+```
+
+With IntentSpec, agents can **verify**:
+
+```
+Discover(URI) → Metadata
+Validate(Goal, Metadata.intent, Metadata.preconditions)
+Simulate(Transaction) → StateChanges
+Verify(StateChanges, Metadata.effects)
+```
+
+This transforms agents from fragile pattern-matchers into constraint-based reasoners.
+
+## The Metadata Schema
+
+Generated files conform to a strict JSON schema. All text is brief and precise for AI consumption.
+
+<Tabs>
+  <Tab title="Example Spec">
+    ```json
+    {
+      "schemaVersion": "1.0.0",
+      "contract": {
+        "name": "ExampleToken",
+        "version": "1.0",
+        "description": "ERC-20 with minting."
+      },
+      "functions": [
+        {
+          "name": "mint",
+          "intent": "Mints tokens to an address; increases total supply.",
+          "selector": "0x40c10f19",
+          "signature": "mint(address,uint256)",
+          "preconditions": [
+            "Caller has MINTER_ROLE.",
+            "Amount > 0 and within supply cap."
+          ],
+          "effects": [
+            "Irreversible: supply increases.",
+            "Economic: dilutes holders."
+          ],
+          "risks": [
+            "Inflation if abused.",
+            "Reentrancy without guards."
+          ],
+          "agentGuidance": "Simulate first; check role revocation in recent blocks."
+        }
+      ],
+      "events": [
+        {
+          "name": "Transfer",
+          "description": "Token moves; index for balances."
+        }
+      ],
+      "invariants": [
+        "Total supply never decreases.",
+        "Paused blocks transfers."
+      ]
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Schema Requirements">
+    **Required Fields:**
+    - `schemaVersion` - Semantic version of the spec
+    - `contract.name` - Contract identifier
+    - `functions` - Array of function metadata
+    - `functions[].name` - Function name
+    - `functions[].intent` - One-line description of purpose
+    
+    **Optional but Recommended:**
+    - `selector` - EVM function selector (0x + 8 hex chars)
+    - `signature` - Canonical Solidity signature
+    - `preconditions` - Array of requirements
+    - `effects` - Array of state changes
+    - `risks` - Array of potential issues
+    - `agentGuidance` - Specific agent instructions
+    - `events` - Event descriptions
+    - `invariants` - Contract-level invariants
+  </Tab>
+</Tabs>
+
+## NatSpec Integration
+
+Developers annotate contracts using custom NatSpec tags:
+
+<CodeGroup>
+```solidity Contract-Level Tags
+/**
+ * @custom:agent-version 1.0
+ * @custom:agent-description User proxy contract with owner/user guards
+ * @custom:agent-invariant Only owner or user can call execute
+ * @custom:agent-invariant Contract balance ≥ sum of user deposits
+ * @custom:agent-event Executed(bytes32 txId) Emitted when call succeeds
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+```solidity Function-Level Tags
+/**
+ * @custom:agent-intent Withdraws collateral and closes position
+ * @custom:agent-precondition Position must be active
+ * @custom:agent-precondition Collateral ratio > minimum threshold
+ * @custom:agent-effect Irreversible: position is closed permanently
+ * @custom:agent-effect Economic: user receives collateral minus fees
+ * @custom:agent-risk High slippage during volatility
+ * @custom:agent-guidance Simulate first; check oracle price staleness
+ */
+function exitPosition(uint256 amount) external {
+  // ...
+}
+```
+</CodeGroup>
+
+## Discovery Mechanism
+
+Contracts implementing IntentSpec expose metadata via the `IIntentSpec` interface:
+
+```solidity
+interface IIntentSpec {
+    /// @notice Returns the URI where the Intent Spec JSON is stored.
+    /// @return A URI (e.g. ipfs://... or https://...) pointing to the manifest.
+    function getIntentSpecURI() external view returns (string memory);
+}
+```
+
+Agents can:
+
+1. **Check for support** - Call `supportsInterface(0x...)` (ERC-165)
+2. **Retrieve URI** - Call `getIntentSpecURI()`
+3. **Fetch metadata** - Resolve the URI to get the JSON spec
+4. **Validate integrity** - Verify content-addressed URIs (e.g., IPFS CID)
+
+## The Agent Verification Loop
+
+<Steps>
+  <Step title="Goal Formation">
+    User instructs agent: "Withdraw 100 USDC from the lending pool"
+  </Step>
+  
+  <Step title="Spec Discovery">
+    Agent calls `getIntentSpecURI()` on the lending pool contract and fetches the JSON metadata.
+  </Step>
+  
+  <Step title="Intent Validation">
+    Agent checks that the `withdraw` function's declared intent matches the goal:
+    
+    ```json
+    {
+      "name": "withdraw",
+      "intent": "Withdraws user's supplied assets from the pool"
+    }
+    ```
+    
+    Intent aligns with goal ✓
+  </Step>
+  
+  <Step title="Precondition Check">
+    Agent verifies all preconditions are met:
+    
+    ```json
+    "preconditions": [
+      "User has supplied assets in the pool",
+      "Pool has sufficient liquidity",
+      "User's health factor > 1.0 after withdrawal"
+    ]
+    ```
+    
+    Agent queries the contract state and confirms all conditions are satisfied.
+  </Step>
+  
+  <Step title="Risk Assessment">
+    Agent reviews declared risks:
+    
+    ```json
+    "risks": [
+      "May affect collateralization ratio",
+      "Price oracle staleness during high volatility"
+    ]
+    ```
+    
+    Agent checks oracle timestamp and decides to proceed.
+  </Step>
+  
+  <Step title="Simulation">
+    Agent simulates the transaction locally and verifies that state changes match declared effects:
+    
+    ```json
+    "effects": [
+      "User balance increases by withdrawal amount",
+      "Pool liquidity decreases",
+      "User's supplied balance decreases"
+    ]
+    ```
+    
+    Simulation confirms expected effects ✓
+  </Step>
+  
+  <Step title="Execution">
+    Agent signs and submits the transaction with confidence.
+  </Step>
+</Steps>
+
+## Key Advantages
+
+<CardGroup cols={2}>
+  <Card title="Reduced Ambiguity" icon="bullseye">
+    Clear, structured intent removes guesswork. Agents know exactly what a function does before calling it.
+  </Card>
+  
+  <Card title="Explicit Preconditions" icon="shield-check">
+    Declared requirements prevent agents from calling functions in invalid states.
+  </Card>
+  
+  <Card title="Risk Visibility" icon="triangle-exclamation">
+    Agents can assess and communicate risks to users before execution.
+  </Card>
+  
+  <Card title="Simulation Validation" icon="flask">
+    Agents can compare simulated outcomes against declared effects to detect mismatches.
+  </Card>
+  
+  <Card title="Standardized Format" icon="file-code">
+    JSON schema enables deterministic parsing across different agent implementations.
+  </Card>
+  
+  <Card title="Immutable Documentation" icon="lock">
+    Content-addressed storage (IPFS) ensures metadata cannot be silently changed.
+  </Card>
+</CardGroup>
+
+## Developer Workflow
+
+<Steps>
+  <Step title="Annotate">
+    Add `@custom:agent-*` NatSpec tags to your Solidity contracts.
+  </Step>
+  
+  <Step title="Generate">
+    Run `npx intentspec compile` to extract metadata and generate JSON files.
+  </Step>
+  
+  <Step title="Review">
+    Inspect the generated `intentspec/*.json` files to ensure accuracy.
+  </Step>
+  
+  <Step title="Publish">
+    Upload JSON to IPFS: `ipfs add intentspec/MyContract.json`
+  </Step>
+  
+  <Step title="Implement Interface">
+    Add `IIntentSpec` to your contract and return the IPFS URI from `getIntentSpecURI()`.
+  </Step>
+  
+  <Step title="Deploy">
+    Deploy your contract with the metadata pointer embedded.
+  </Step>
+</Steps>
+
+<Info>
+IntentSpec is designed to integrate seamlessly into existing development workflows. Annotations are standard NatSpec comments, so they don't require compiler modifications or special tooling beyond the IntentSpec CLI.
+</Info>
+
+## Impact on Safety
+
+By moving from estimation to verification, IntentSpec fundamentally changes how agents interact with contracts:
+
+- **Before:** Agents guess intent from function names → high variance → agentic drift
+- **After:** Agents validate against declared metadata → constraint-based reasoning → reduced error rates
+
+This shift enables a safer, more predictable agentic economy.

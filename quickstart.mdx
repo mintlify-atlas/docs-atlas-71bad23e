@@ -1,80 +1,286 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get your first intentspec.json output in minutes
 ---
 
-## Get started in three steps
+# Quick Start
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through annotating a Solidity contract and generating your first IntentSpec JSON file.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- **Node.js** ≥ 18
+- A Solidity contract (`.sol` file)
+
+## Step 1: Annotate Your Contract
+
+Add `@custom:agent-*` NatSpec tags to your Solidity contract. Place tags in **block comments** (`/** ... */`) directly above the contract or function.
+
+### Contract-Level Annotations
+
+Add metadata about your contract above the `contract` declaration:
+
+```solidity
+/**
+ * @custom:agent-version 1.0
+ * @custom:agent-description Proxy contract for user operations; only owner or designated user can execute.
+ * @custom:agent-invariant owner and user are set at construction and immutable.
+ * @custom:agent-invariant Only owner or user can call protected functions unless documented otherwise.
+ * @custom:agent-event Executed Emitted when an external call is executed; includes target and success.
+ * @custom:agent-event TokensWithdrawn Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn.
+ */
+contract UserProxy {
+    // contract code...
+}
+```
+
+<Info>
+  Contract-level tags are optional but recommended for richer metadata.
+</Info>
+
+### Function-Level Annotations
+
+Annotate functions with intent, preconditions, effects, risks, and guidance:
+
+```solidity
+/**
+ * @dev Withdraw a specific amount of ERC20 tokens
+ * @custom:agent-intent Withdraw a specific amount of ERC20 tokens to an address.
+ * @custom:agent-precondition Caller is owner or user.
+ * @custom:agent-precondition token and to are non-zero; amount > 0 and balance sufficient.
+ * @custom:agent-effect Balance of this contract decreases; to receives tokens. Emits TokensWithdrawn.
+ * @custom:agent-risk Irreversible transfer.
+ */
+function withdrawERC20(address token, address to, uint256 amount) external {
+    // function implementation...
+}
+```
+
+<Warning>
+  **`@custom:agent-intent`** is **required** for a function to be included in the generated spec. All other function-level tags are optional.
+</Warning>
+
+### Available NatSpec Tags
+
+#### Contract-Level
+
+| Tag | Purpose | Example |
+|-----|---------|--------|
+| `@custom:agent-version` | Contract version | `@custom:agent-version 1.0` |
+| `@custom:agent-description` | Short description | `@custom:agent-description Proxy for user ops.` |
+| `@custom:agent-invariant` | Invariant (can repeat) | `@custom:agent-invariant owner is immutable.` |
+| `@custom:agent-event` | Event name + description | `@custom:agent-event Transfer Token balance change.` |
+
+#### Function-Level
+
+| Tag | Purpose | Example |
+|-----|---------|--------|
+| `@custom:agent-intent` | **Required.** One-line intent | `@custom:agent-intent Withdraws ERC20 to an address.` |
+| `@custom:agent-precondition` | Precondition (can repeat) | `@custom:agent-precondition Caller is owner or user.` |
+| `@custom:agent-effect` | Effect (can repeat) | `@custom:agent-effect Balance decreases; emits Transfer.` |
+| `@custom:agent-risk` | Risk (can repeat) | `@custom:agent-risk Irreversible transfer.` |
+| `@custom:agent-guidance` | Guidance for agents | `@custom:agent-guidance Check balance before calling.` |
+
+## Step 2: Generate the Spec
+
+Run the IntentSpec CLI to extract metadata and generate JSON files.
+
+### Option A: Single File (stdout)
+
+Extract from a single file and print JSON to stdout:
+
+```bash
+npx intentspec extract-natspec --file contracts/UserProxy.sol
+```
+
+This is useful for:
+- Quick inspection
+- Piping into other tools (e.g., `jq`)
+- CI/CD validation
+
+<Tip>
+  Pipe the output to `jq` for pretty formatting: `npx intentspec extract-natspec -f contracts/UserProxy.sol | jq .`
+</Tip>
+
+### Option B: Compile Entire Project
+
+Scan your project directory for all `.sol` files and generate JSON files:
+
+```bash
+npx intentspec compile
+```
+
+This will:
+- Recursively scan for `.sol` files (excluding `node_modules` and `.git`)
+- Extract metadata from each contract with valid NatSpec
+- Write one JSON file per contract to **`intentspec/<ContractName>.json`**
+
+<CodeGroup>
+
+```bash Default (current directory)
+npx intentspec compile
+```
+
+```bash Custom directory
+npx intentspec compile --dir ./src/contracts
+```
+
+```bash Short flag
+npx intentspec compile -d ./contracts
+```
+
+</CodeGroup>
+
+## Step 3: Inspect the Output
+
+After running `compile`, check the `intentspec/` folder:
+
+```bash
+ls intentspec/
+# Output: UserProxy.json  Token.json  ...
+```
+
+Example output for the `UserProxy` contract:
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0",
+    "description": "Proxy contract for user operations; only owner or designated user can execute."
+  },
+  "functions": [
+    {
+      "name": "withdrawERC20",
+      "signature": "0x44004cc1",
+      "intent": "Withdraw a specific amount of ERC20 tokens to an address.",
+      "preconditions": [
+        "Caller is owner or user.",
+        "token and to are non-zero; amount > 0 and balance sufficient."
+      ],
+      "effects": [
+        "Balance of this contract decreases; to receives tokens. Emits TokensWithdrawn."
+      ],
+      "risks": ["Irreversible transfer."]
+    },
+    {
+      "name": "exec",
+      "signature": "0x1cff79cd",
+      "intent": "Execute an arbitrary call to a target contract; may approve ERC20 if needed.",
+      "preconditions": [
+        "Caller is owner or user.",
+        "target is not zero and not this contract."
+      ],
+      "effects": [
+        "If token and amount set, may approve target to spend tokens.",
+        "Emits Executed; on failure reverts with target's reason or ExecutionFailed."
+      ],
+      "risks": [
+        "External call can perform any action; validate target and data off-chain."
+      ],
+      "agentGuidance": "Simulate the call first; ensure target is trusted."
+    }
+  ],
+  "events": [
+    {
+      "name": "Executed",
+      "description": "Emitted when an external call is executed; includes target and success."
+    },
+    {
+      "name": "TokensWithdrawn",
+      "description": "Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn."
+    }
+  ],
+  "invariants": [
+    "owner and user are set at construction and immutable.",
+    "Only owner or user can call protected functions unless documented otherwise."
+  ]
+}
+```
+
+<Info>
+  The **`signature`** field is the EVM function selector (first 4 bytes of `keccak256(functionSignature)`) in hex, automatically computed by the CLI.
+</Info>
+
+## Step 4: Publish & Use
+
+Now that you have your `intentspec.json` files:
+
+<Steps>
+  <Step title="Upload to IPFS or a stable URI">
+    Host your spec files at a permanent location (IPFS, Arweave, or HTTPS).
+  </Step>
+  
+  <Step title="Implement IIntentSpec in your contract">
+    Add the `IIntentSpec` interface to your contract:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```solidity
+    import "./IIntentSpec.sol";
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    contract UserProxy is IIntentSpec {
+        function getIntentSpecURI() external pure returns (string memory) {
+            return "ipfs://QmYourHashHere";
+        }
+        
+        // rest of contract...
+    }
+    ```
+  </Step>
+  
+  <Step title="Agents discover and validate">
+    Agents call `getIntentSpecURI()` to fetch your spec, validate their goals against declared intents, and simulate transactions before signing.
+  </Step>
+</Steps>
 
-### Step 2: Deploy your changes
+## Example Workflow
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+Here's the complete workflow from annotation to deployment:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+```bash
+# 1. Annotate your contract with @custom:agent-* tags
+vim contracts/UserProxy.sol
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+# 2. Generate specs
+npx intentspec compile
 
-### Step 3: Go live
+# 3. Inspect output
+cat intentspec/UserProxy.json | jq .
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+# 4. Upload to IPFS (example using ipfs CLI)
+ipfs add intentspec/UserProxy.json
+# Returns: QmYourHashHere
 
-## Next steps
+# 5. Update your contract to return the IPFS URI
+# Implement getIntentSpecURI() -> "ipfs://QmYourHashHere"
 
-Now that you have your docs running, explore these key features:
+# 6. Deploy your contract
+forge create UserProxy --constructor-args $OWNER $USER
+
+# 7. Agents can now discover your spec onchain!
+```
+
+## Re-generating Specs
+
+After updating your NatSpec annotations, simply run the compile command again:
+
+```bash
+npx intentspec compile
+```
+
+The CLI will overwrite existing JSON files with the latest metadata.
+
+<Tip>
+  Add `intentspec/` to your `.gitignore` if you generate specs as part of your build process, or commit them if you want to track changes to your metadata over time.
+</Tip>
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation" icon="download" href="/installation">
+    Learn about different installation methods (global, dev dependency, build from source)
+  </Card>
+  
+  <Card title="Full Example" icon="code" href="https://github.com/collinsadi/intentspec/blob/main/example/UserProxy.sol">
+    View the complete annotated `UserProxy.sol` example contract
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

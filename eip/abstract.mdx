@@ -1,0 +1,11 @@
+---
+title: Abstract
+description: EIP-8174 Abstract - Intent spec for contracts
+---
+
+This proposal defines a standard for attaching machine-readable semantic manifests to Ethereum smart contracts. It specifies:
+
+1. An [ERC-165](https://eips.ethereum.org/EIPS/eip-165) discoverable interface (`IIntentSpec`) exposing a metadata URI.
+2. A canonical JSON schema describing contract-level and function-level semantic intent.
+
+While the Application Binary Interface (ABI) defines how to call a function, it does not define the semantic intent, preconditions, or economic risks associated with execution. This ERC introduces a structured metadata layer to enable automated systems to reason about contract behavior prior to execution.

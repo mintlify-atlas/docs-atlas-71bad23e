@@ -1,0 +1,255 @@
+---
+title: "Generated JSON Output"
+description: "The agent-readable JSON generated from UserProxy contract annotations"
+---
+
+## IntentSpec Output
+
+When you run IntentSpec on the UserProxy contract, it generates structured JSON metadata that agents can consume. This page shows the complete output and explains the mapping from NatSpec annotations to JSON fields.
+
+## Complete JSON Output
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0",
+    "description": "Proxy contract for user operations; only owner or designated user can execute."
+  },
+  "functions": [
+    {
+      "name": "exec",
+      "intent": "Execute an arbitrary call to a target contract; may approve ERC20 if needed.",
+      "preconditions": [
+        "Caller is owner or user.",
+        "target is not zero and not this contract."
+      ],
+      "effects": [
+        "If token and amount set, may approve target to spend tokens.",
+        "Emits Executed; on failure reverts with target's reason or ExecutionFailed."
+      ],
+      "risks": [
+        "External call can perform any action; validate target and data off-chain."
+      ],
+      "agentGuidance": "Simulate the call first; ensure target is trusted.",
+      "signature": "0xa55f65fe"
+    },
+    {
+      "name": "withdrawERC20",
+      "intent": "Withdraw a specific amount of ERC20 tokens to an address.",
+      "preconditions": [
+        "Caller is owner or user.",
+        "token and to are non-zero; amount > 0 and balance sufficient."
+      ],
+      "effects": [
+        "Balance of this contract decreases; to receives tokens. Emits TokensWithdrawn."
+      ],
+      "risks": [
+        "Irreversible transfer."
+      ],
+      "signature": "0x44004cc1"
+    }
+  ],
+  "events": [
+    {
+      "name": "Executed",
+      "description": "Emitted when an external call is executed; includes target and success."
+    },
+    {
+      "name": "TokensWithdrawn",
+      "description": "Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn."
+    },
+    {
+      "name": "ETHWithdrawn",
+      "description": "Emitted when ETH is withdrawn."
+    },
+    {
+      "name": "TokenApproved",
+      "description": "Emitted when ERC20 approval is granted for a target."
+    }
+  ],
+  "invariants": [
+    "owner and user are set at construction and immutable.",
+    "Only owner or user can call protected functions unless documented otherwise."
+  ]
+}
+```
+
+## JSON Schema Breakdown
+
+### Contract Metadata
+
+```json
+"contract": {
+  "name": "UserProxy",
+  "version": "1.0",
+  "description": "Proxy contract for user operations; only owner or designated user can execute."
+}
+```
+
+**Mapping:**
+- `name`: Extracted from contract declaration
+- `version`: From `@custom:agent-version` tag
+- `description`: From `@custom:agent-description` tag
+
+### Functions Array
+
+Each function with IntentSpec annotations is represented as an object:
+
+```json
+{
+  "name": "exec",
+  "intent": "Execute an arbitrary call to a target contract; may approve ERC20 if needed.",
+  "preconditions": [
+    "Caller is owner or user.",
+    "target is not zero and not this contract."
+  ],
+  "effects": [
+    "If token and amount set, may approve target to spend tokens.",
+    "Emits Executed; on failure reverts with target's reason or ExecutionFailed."
+  ],
+  "risks": [
+    "External call can perform any action; validate target and data off-chain."
+  ],
+  "agentGuidance": "Simulate the call first; ensure target is trusted.",
+  "signature": "0xa55f65fe"
+}
+```
+
+**Mapping:**
+- `name`: Function name from Solidity
+- `intent`: From `@custom:agent-intent` tag
+- `preconditions[]`: Array from multiple `@custom:agent-precondition` tags
+- `effects[]`: Array from multiple `@custom:agent-effect` tags
+- `risks[]`: Array from multiple `@custom:agent-risk` tags
+- `agentGuidance`: From `@custom:agent-guidance` tag (note: singular in annotation, but contains guidance text)
+- `signature`: Automatically computed function selector (first 4 bytes of keccak256 hash)
+
+### Events Array
+
+```json
+"events": [
+  {
+    "name": "Executed",
+    "description": "Emitted when an external call is executed; includes target and success."
+  }
+]
+```
+
+**Mapping:**
+- `name`: Parsed from `@custom:agent-event EventName Description` format
+- `description`: The text following the event name
+
+**Source annotation:**
+```solidity
+@custom:agent-event Executed Emitted when an external call is executed; includes target and success.
+```
+
+### Invariants Array
+
+```json
+"invariants": [
+  "owner and user are set at construction and immutable.",
+  "Only owner or user can call protected functions unless documented otherwise."
+]
+```
+
+**Mapping:**
+- Each `@custom:agent-invariant` tag becomes an array element
+- Order is preserved from the contract
+
+## Function Signatures
+
+IntentSpec automatically computes function signatures:
+
+- `exec`: `0xa55f65fe` - Selector for `exec(address,bytes,address,uint256)`
+- `withdrawERC20`: `0x44004cc1` - Selector for `withdrawERC20(address,address,uint256)`
+
+These signatures allow agents to:
+1. Identify functions in transaction data
+2. Decode function calls
+3. Match transactions to their documented intents
+
+## How Agents Use This Data
+
+An AI agent can use this JSON to:
+
+### 1. Understand Capabilities
+```javascript
+// Agent reads the intent to understand what the function does
+const execIntent = functions.find(f => f.name === 'exec').intent;
+// "Execute an arbitrary call to a target contract; may approve ERC20 if needed."
+```
+
+### 2. Validate Preconditions
+```javascript
+// Before calling exec(), check preconditions
+const execPreconditions = functions.find(f => f.name === 'exec').preconditions;
+// ["Caller is owner or user.", "target is not zero and not this contract."]
+```
+
+### 3. Predict Effects
+```javascript
+// Understand what will happen
+const execEffects = functions.find(f => f.name === 'exec').effects;
+// ["If token and amount set, may approve target to spend tokens.", ...]
+```
+
+### 4. Assess Risks
+```javascript
+// Evaluate security implications
+const execRisks = functions.find(f => f.name === 'exec').risks;
+// ["External call can perform any action; validate target and data off-chain."]
+```
+
+### 5. Follow Best Practices
+```javascript
+// Get guidance on how to use the function
+const execGuidance = functions.find(f => f.name === 'exec').agentGuidance;
+// "Simulate the call first; ensure target is trusted."
+```
+
+### 6. Monitor Events
+```javascript
+// Know what events to watch for
+const executedEvent = events.find(e => e.name === 'Executed');
+// "Emitted when an external call is executed; includes target and success."
+```
+
+### 7. Respect Invariants
+```javascript
+// Understand contract guarantees
+invariants.forEach(inv => console.log(inv));
+// "owner and user are set at construction and immutable."
+// "Only owner or user can call protected functions unless documented otherwise."
+```
+
+## Annotation to JSON Mapping Reference
+
+| Annotation Tag | JSON Field | Type | Location |
+|----------------|------------|------|----------|
+| `@custom:agent-version` | `contract.version` | string | Contract level |
+| `@custom:agent-description` | `contract.description` | string | Contract level |
+| `@custom:agent-invariant` | `invariants[]` | array | Contract level |
+| `@custom:agent-event` | `events[]` | array of {name, description} | Contract level |
+| `@custom:agent-intent` | `functions[].intent` | string | Function level |
+| `@custom:agent-precondition` | `functions[].preconditions[]` | array | Function level |
+| `@custom:agent-effect` | `functions[].effects[]` | array | Function level |
+| `@custom:agent-risk` | `functions[].risks[]` | array | Function level |
+| `@custom:agent-guidance` | `functions[].agentGuidance` | string | Function level |
+
+## Generating This Output
+
+To generate this JSON from the UserProxy contract:
+
+```bash
+intentspec extract example/UserProxy.sol -o UserProxy.json
+```
+
+The output file will be created at the specified path with properly formatted JSON.
+
+## Next Steps
+
+- Learn more about [NatSpec tags](/natspec/overview)
+- See the [annotated contract walkthrough](/examples/annotated-contract)
+- Read the [UserProxy contract overview](/examples/userproxy-contract)

@@ -1,0 +1,145 @@
+---
+title: JSON Schema
+description: The IntentSpec JSON schema specification
+---
+
+## Overview
+
+IntentSpec uses a JSON schema to define the structure of agent-readable metadata extracted from Solidity contracts. The schema ensures consistency and enables validation of generated output.
+
+## Full Schema
+
+The complete JSON schema is defined at `schema/intentspec.schema.json`:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://intentspec.collinsadi.xyz/v1/intentspec.schema.json",
+  "title": "IntentSpec",
+  "type": "object",
+  "required": ["contract", "functions"],
+  "properties": {
+    "contract": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "intent"],
+        "properties": {
+          "name": { "type": "string" },
+          "signature": { "type": "string", "description": "EVM function selector in hexadecimal (0x + 8 hex chars)" },
+          "intent": { "type": "string" },
+          "preconditions": { "type": "array", "items": { "type": "string" } },
+          "effects": { "type": "array", "items": { "type": "string" } },
+          "risks": { "type": "array", "items": { "type": "string" } },
+          "agentGuidance": { "type": "string" }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
+```
+
+## Required Fields
+
+### Top Level
+- `contract` (object) - Contract metadata
+- `functions` (array) - Array of function specifications
+
+### Contract Object
+- `name` (string) - The contract name
+
+### Function Objects
+- `name` (string) - The function name
+- `intent` (string) - Human and agent-readable description of what the function does
+
+## Optional Fields
+
+### Contract Object
+- `version` (string) - Contract version from `@custom:agent-version`
+- `description` (string) - Contract description from `@dev`, `@title`, or `@custom:agent-description`
+
+### Function Objects
+- `signature` (string) - EVM function selector (0x + 8 hex characters)
+- `preconditions` (array of strings) - Conditions that must be met before calling
+- `effects` (array of strings) - State changes and side effects
+- `risks` (array of strings) - Potential risks and warnings
+- `agentGuidance` (string) - Additional guidance for agents
+
+### Top Level
+- `events` (array) - Contract events with optional descriptions
+- `invariants` (array of strings) - Contract invariants that must hold
+
+## Example Valid Output
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0.0",
+    "description": "A proxy contract for executing arbitrary calls on behalf of users"
+  },
+  "functions": [
+    {
+      "name": "execute",
+      "signature": "0x1cff79cd",
+      "intent": "Execute an arbitrary call to a target address with provided calldata",
+      "preconditions": [
+        "Caller must be the contract owner",
+        "Target address must not be zero address"
+      ],
+      "effects": [
+        "Executes external call to target",
+        "Emits ExecutionResult event"
+      ],
+      "risks": [
+        "Arbitrary call execution can lead to reentrancy",
+        "Failed calls will revert the transaction"
+      ],
+      "agentGuidance": "Always verify the target contract is trusted before execution"
+    }
+  ],
+  "events": [
+    {
+      "name": "ExecutionResult",
+      "description": "Emitted when a call is executed"
+    }
+  ],
+  "invariants": [
+    "Contract owner cannot be zero address",
+    "Only owner can execute calls"
+  ]
+}
+```
+
+## Schema Location
+
+The canonical schema is hosted at:
+```
+https://intentspec.collinsadi.xyz/v1/intentspec.schema.json
+```
+
+The schema follows JSON Schema Draft 2020-12 specification.

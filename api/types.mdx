@@ -1,0 +1,293 @@
+---
+title: "TypeScript Types"
+description: "Type definitions for IntentSpec metadata structures"
+---
+
+## Overview
+
+IntentSpec provides TypeScript types that align with the IntentSpec JSON schema. These types ensure type safety when working with extracted metadata.
+
+Source: `cli/src/natspec.ts:11-51`
+
+## Core Types
+
+### IntentSpec
+
+The top-level structure containing all contract metadata.
+
+```typescript
+interface IntentSpec {
+  contract: IntentSpecContract;
+  functions: IntentSpecFunction[];
+  events?: IntentSpecEvent[];
+  invariants?: string[];
+}
+```
+
+<ResponseField name="contract" type="IntentSpecContract" required>
+  Contract-level metadata including name, version, and description.
+</ResponseField>
+
+<ResponseField name="functions" type="IntentSpecFunction[]" required>
+  Array of function specifications. Each function must have at least a name and intent.
+</ResponseField>
+
+<ResponseField name="events" type="IntentSpecEvent[]">
+  Optional array of event descriptions.
+</ResponseField>
+
+<ResponseField name="invariants" type="string[]">
+  Optional array of contract invariants - conditions that should always hold true.
+</ResponseField>
+
+### IntentSpecContract
+
+Contract-level metadata.
+
+```typescript
+interface IntentSpecContract {
+  name: string;
+  version?: string;
+  description?: string;
+}
+```
+
+<ResponseField name="name" type="string" required>
+  The contract name extracted from the `contract ContractName {` declaration.
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  Optional version string from `@custom:agent-version` tag.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Optional description from `@custom:agent-description`, `@dev`, or `@title` tags.
+</ResponseField>
+
+### IntentSpecFunction
+
+Function-level metadata describing what a function does and its behavior.
+
+```typescript
+interface IntentSpecFunction {
+  name: string;
+  signature?: string;
+  intent: string;
+  preconditions?: string[];
+  effects?: string[];
+  risks?: string[];
+  agentGuidance?: string;
+}
+```
+
+<ResponseField name="name" type="string" required>
+  The function name extracted from the function declaration.
+</ResponseField>
+
+<ResponseField name="signature" type="string">
+  EVM function selector in hexadecimal format (0x + 8 hex characters). Automatically computed from the function signature.
+  
+  Example: `"0xa9059cbb"` for `transfer(address,uint256)`
+</ResponseField>
+
+<ResponseField name="intent" type="string" required>
+  What the function does in human-readable terms. Extracted from `@custom:agent-intent` tag.
+  
+  Example: `"Transfer tokens to another address"`
+</ResponseField>
+
+<ResponseField name="preconditions" type="string[]">
+  Array of conditions that must be true before the function executes. From `@custom:agent-precondition` tags (can specify multiple).
+  
+  Example: `["Caller must have sufficient balance", "Recipient address must not be zero"]`
+</ResponseField>
+
+<ResponseField name="effects" type="string[]">
+  Array of state changes the function makes. From `@custom:agent-effect` tags.
+  
+  Example: `["Decreases sender balance", "Increases recipient balance"]`
+</ResponseField>
+
+<ResponseField name="risks" type="string[]">
+  Array of potential risks or warnings. From `@custom:agent-risk` tags.
+  
+  Example: `["Irreversible transaction", "May fail if recipient is a contract"]`
+</ResponseField>
+
+<ResponseField name="agentGuidance" type="string">
+  Additional guidance for AI agents on how to use this function. From `@custom:agent-guidance` tag.
+  
+  Example: `"Always check balance before calling"`
+</ResponseField>
+
+### IntentSpecEvent
+
+Event metadata for contract events.
+
+```typescript
+interface IntentSpecEvent {
+  name: string;
+  description?: string;
+}
+```
+
+<ResponseField name="name" type="string" required>
+  The event name.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Optional description of when and why this event is emitted.
+</ResponseField>
+
+## Extraction Result Types
+
+### ExtractOutcome
+
+Union type for extraction results.
+
+```typescript
+type ExtractOutcome = ExtractResult | ExtractError
+```
+
+### ExtractResult
+
+Success result from extraction functions.
+
+```typescript
+interface ExtractResult {
+  ok: true;
+  spec: IntentSpec;
+}
+```
+
+<ResponseField name="ok" type="true" required>
+  Discriminant property - always `true` for successful extractions.
+</ResponseField>
+
+<ResponseField name="spec" type="IntentSpec" required>
+  The extracted Intent Spec metadata.
+</ResponseField>
+
+### ExtractError
+
+Error result from extraction functions.
+
+```typescript
+interface ExtractError {
+  ok: false;
+  reason: string;
+}
+```
+
+<ResponseField name="ok" type="false" required>
+  Discriminant property - always `false` for failed extractions.
+</ResponseField>
+
+<ResponseField name="reason" type="string" required>
+  Human-readable error message explaining why extraction failed.
+</ResponseField>
+
+## Usage Examples
+
+### Type Guards
+
+```typescript
+import { extractNatSpec, ExtractOutcome } from "intentspec";
+
+const result: ExtractOutcome = extractNatSpec("./Contract.sol");
+
+if (result.ok) {
+  // TypeScript knows result.spec exists
+  const spec = result.spec;
+  console.log(spec.contract.name);
+} else {
+  // TypeScript knows result.reason exists
+  console.error(result.reason);
+}
+```
+
+### Working with Functions
+
+```typescript
+import { IntentSpecFunction } from "intentspec";
+
+function analyzeFunctionRisks(fn: IntentSpecFunction): void {
+  if (fn.risks && fn.risks.length > 0) {
+    console.log(`⚠️  ${fn.name} has ${fn.risks.length} risk(s):`);
+    fn.risks.forEach(risk => console.log(`   - ${risk}`));
+  }
+  
+  if (fn.preconditions) {
+    console.log(`Prerequisites for ${fn.name}:`);
+    fn.preconditions.forEach(pre => console.log(`   - ${pre}`));
+  }
+}
+```
+
+### Creating Specs Programmatically
+
+```typescript
+import { IntentSpec } from "intentspec";
+
+const spec: IntentSpec = {
+  contract: {
+    name: "TokenVault",
+    version: "1.0.0",
+    description: "Secure token storage"
+  },
+  functions: [
+    {
+      name: "deposit",
+      signature: "0xb6b55f25",
+      intent: "Deposit tokens into the vault",
+      preconditions: ["User must approve token transfer"],
+      effects: ["Increases user's vault balance"],
+      risks: ["Tokens are locked until withdrawal"]
+    }
+  ],
+  invariants: [
+    "Total deposits equals sum of all user balances"
+  ]
+};
+```
+
+### Filtering and Searching
+
+```typescript
+import { IntentSpec } from "intentspec";
+
+function findFunctionsByIntent(
+  spec: IntentSpec,
+  keyword: string
+): IntentSpecFunction[] {
+  return spec.functions.filter(fn =>
+    fn.intent.toLowerCase().includes(keyword.toLowerCase())
+  );
+}
+
+function hasRiskyFunctions(spec: IntentSpec): boolean {
+  return spec.functions.some(fn => fn.risks && fn.risks.length > 0);
+}
+
+function getFunctionBySignature(
+  spec: IntentSpec,
+  selector: string
+): IntentSpecFunction | undefined {
+  return spec.functions.find(fn => fn.signature === selector);
+}
+```
+
+## Schema Alignment
+
+These TypeScript types align with the IntentSpec JSON schema defined in `packages/schema/intentspec.schema.json`. This ensures compatibility across:
+
+- CLI extraction tools
+- JSON storage and validation
+- Agent consumption of metadata
+- API integrations
+
+## Related Documentation
+
+- [extractNatSpec()](/api/extract-natspec) - Extract specs from files
+- [extractFromContent()](/api/extract-from-content) - Extract specs from strings
+- [IIntentSpec](/api/iintentspec) - Solidity interface

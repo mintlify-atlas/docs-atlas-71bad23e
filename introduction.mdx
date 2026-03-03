@@ -1,0 +1,125 @@
+---
+title: IntentSpec
+description: Agent-readable smart contract documentation layer — bridging the semantic gap between onchain logic and autonomous reasoning
+---
+
+# IntentSpec
+
+**Agent-readable smart contract documentation layer** — bridging the semantic gap between onchain logic and autonomous reasoning.
+
+Onchain activity is increasingly driven by **autonomous agents**. Smart contracts, however, remain optimized for human auditors. Agents today infer behavior from function names and ABIs alone, which is brittle and error-prone.
+
+**IntentSpec** adds a standardized, machine-verifiable metadata layer so developers can declare a function's **intent**, **economic impact**, and **safety boundaries**. By turning opaque bytecode into structured semantics, IntentSpec reduces systemic risk and supports a safer agentic economy.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Standardized Metadata" icon="file-contract" href="/quickstart">
+    Use `@custom:agent-*` NatSpec tags to declare intent, preconditions, effects, risks, and guidance for autonomous agents.
+  </Card>
+  
+  <Card title="Schema-Compliant JSON" icon="code" href="/installation">
+    Generate machine-readable `intentspec.json` files that conform to a strict schema for predictable agent parsing.
+  </Card>
+  
+  <Card title="EVM Function Selectors" icon="fingerprint">
+    Automatically compute and include function selectors (first 4 bytes of `keccak256(signature)`) for exact ABI matching.
+  </Card>
+  
+  <Card title="Onchain Discovery" icon="link">
+    Implement `IIntentSpec.getIntentSpecURI()` to point agents to your published metadata (IPFS, HTTP, etc.).
+  </Card>
+</CardGroup>
+
+## The Problem: The "Black Box" of ABIs
+
+Agents interact with contracts via the **Application Binary Interface (ABI)**. The ABI defines *how* to call a function but not *why* or *what the risks are*.
+
+- **Ambiguity** — Is `execute()` a harmless state update or a high-risk treasury transfer?
+- **Invisible preconditions** — Does this function depend on oracle state not visible in the parameters?
+- **Irreversibility** — Agents lack a clear "danger" signal for actions that cannot be undone.
+
+## The Solution
+
+IntentSpec gives you a **metadata standard** and **tooling** so a contract's semantic intent lives in one place and is machine-readable.
+
+<Steps>
+  <Step title="Declare once">
+    Annotate your Solidity with `@custom:agent-*` NatSpec; the CLI emits schema-strict JSON (intent, preconditions, effects, risks, guidance).
+  </Step>
+  
+  <Step title="Publish & point">
+    Host the generated spec at a stable URI (e.g. IPFS). Implement `IIntentSpec` and return that URI from `getIntentSpecURI()` so agents can resolve it onchain.
+  </Step>
+  
+  <Step title="Agent loop">
+    Agents **discover** the spec (call `getIntentSpecURI()` or use a registry), **validate** their goal against the declared intent and preconditions, and **simulate** locally to confirm state changes match the metadata before signing.
+  </Step>
+</Steps>
+
+## Example Output
+
+Generated files conform to the IntentSpec JSON schema. All text is brief and precise for AI consumption.
+
+```json
+{
+  "contract": {
+    "name": "ExampleToken",
+    "version": "1.0",
+    "description": "ERC-20 with minting."
+  },
+  "functions": [
+    {
+      "name": "mint",
+      "intent": "Mints tokens to an address; increases total supply.",
+      "signature": "0x40c10f19",
+      "preconditions": [
+        "Caller has MINTER_ROLE.",
+        "Amount > 0 and within supply cap."
+      ],
+      "effects": [
+        "Irreversible: supply increases.",
+        "Economic: dilutes holders."
+      ],
+      "risks": ["Inflation if abused.", "Reentrancy without guards."],
+      "agentGuidance": "Simulate first; check role revocation in recent blocks."
+    }
+  ],
+  "events": [
+    {
+      "name": "Transfer",
+      "description": "Token moves; index for balances."
+    }
+  ],
+  "invariants": ["Total supply never decreases.", "Paused blocks transfers."]
+}
+```
+
+<Info>
+  **`signature`** is the EVM function selector (first 4 bytes of `keccak256(functionSignature)`) in hex.
+</Info>
+
+## Impact & Use Cases
+
+- **DeFi protocols** — Make contracts interpretable by agents to attract "agentic liquidity."
+- **Security auditors** — Machine-readable spec to compare against bytecode and behavior.
+- **Users** — Agents (e.g. ENS-integrated) can explain transaction risks in plain language.
+- **Systemic safety** — Reduce AI-driven "flash crashes" from agents misinterpreting complex logic.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your first `intentspec.json` output in minutes
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Install the CLI globally, as a dev dependency, or run with npx
+  </Card>
+</CardGroup>
+
+---
+
+<Note>
+  IntentSpec is an **[EIP-2004 DRAFT](https://github.com/ethereum/ERCs/pull/1557)** proposal. See the [GitHub repository](https://github.com/collinsadi/intentspec) for the full specification.
+</Note>

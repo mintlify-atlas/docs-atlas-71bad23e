@@ -1,0 +1,145 @@
+---
+title: The "Black Box" of ABIs
+description: Understanding why current contract interfaces fail autonomous agents
+---
+
+## The Semantic Gap
+
+Agents interact with smart contracts via the **Application Binary Interface (ABI)**. The ABI is essential for encoding function calls and decoding return values - but it has a critical limitation:
+
+<Warning>
+The ABI defines **how** to call a function, but not **why** or **what the risks are**.
+</Warning>
+
+## What's Missing from ABIs
+
+The ABI provides function signatures and parameter types but does not express:
+
+- **Economic intent** - What is this function trying to accomplish?
+- **Safety preconditions** - What conditions must be true before calling this function?
+- **Irreversible effects** - What state changes cannot be undone?
+- **Risk disclosures** - What can go wrong and under what conditions?
+
+### Example: The Ambiguous `execute()`
+
+Consider a function with this signature:
+
+```solidity
+function execute(bytes calldata data) external returns (bool)
+```
+
+From the ABI alone, an agent cannot determine:
+
+- Is this a harmless state update or a high-risk treasury transfer?
+- Does it require specific permissions or oracle state?
+- Can the action be reversed if something goes wrong?
+- What economic impact will this have on the protocol?
+
+The function name `execute` is generic. The `bytes` parameter is opaque. The agent must **guess** the intent.
+
+## The Three Core Problems
+
+<AccordionGroup>
+  <Accordion title="1. Ambiguity">
+    Function names and parameter types do not reliably communicate intent. Two functions with identical signatures may have vastly different semantic meanings and risk profiles.
+    
+    **Example:**
+    - `withdraw(uint256 amount)` - Could be withdrawing your own funds (safe)
+    - `withdraw(uint256 amount)` - Could be withdrawing from a shared treasury (high risk)
+    
+    Without additional context, agents cannot distinguish between these scenarios.
+  </Accordion>
+  
+  <Accordion title="2. Invisible Preconditions">
+    Many contract functions depend on external state that is not visible in the function parameters:
+    
+    - Oracle price feeds
+    - Governance votes or time locks
+    - Multi-signature approvals
+    - Global protocol state (paused, deprecated, migrated)
+    
+    Agents calling these functions without checking preconditions may trigger reverts or unexpected behavior.
+  </Accordion>
+  
+  <Accordion title="3. Irreversibility">
+    Some operations cannot be undone:
+    
+    - Minting tokens increases total supply permanently
+    - Burning tokens destroys value irreversibly
+    - Self-destruct operations cannot be rolled back
+    - Governance proposals may have finality after execution
+    
+    Agents lack a clear "danger" signal for actions that cannot be reversed. A naive agent might execute an irreversible operation based on incomplete information.
+  </Accordion>
+</AccordionGroup>
+
+## The Cost of Ambiguity
+
+When agents must infer intent from sparse metadata, several failure modes emerge:
+
+### Agentic Drift
+
+Agents perform a translation:
+
+```
+T(ABI, Bytecode) → Intent_Estimated
+```
+
+Because the ABI is sparse, **estimation variance is high**. Over multiple transactions, small errors compound. What started as a reasonable inference becomes increasingly divorced from actual intent.
+
+### Catastrophic Misinterpretation
+
+Without semantic anchors, agents may:
+
+- Call functions with unintended economic consequences
+- Approve token transfers to malicious contracts
+- Trigger liquidations or other irreversible state changes
+- Execute transactions during unsafe market conditions
+
+### False Confidence
+
+Current LLM-driven agents often operate with high confidence even when working with incomplete information. They pattern-match on function names and common conventions, which works until it catastrophically fails.
+
+## Current Workarounds (and Why They Fail)
+
+<CardGroup cols={2}>
+  <Card title="Function Name Conventions" icon="signature">
+    **Approach:** Use descriptive function names like `withdrawUserFunds()`
+    
+    **Problem:** Not standardized. Developers use different naming conventions. No enforcement.
+  </Card>
+  
+  <Card title="NatSpec Comments" icon="comment">
+    **Approach:** Add human-readable documentation above functions
+    
+    **Problem:** Unstructured. Not machine-verifiable. Often incomplete or outdated.
+  </Card>
+  
+  <Card title="Bytecode Analysis" icon="magnifying-glass">
+    **Approach:** Analyze compiled bytecode to infer behavior
+    
+    **Problem:** Computationally expensive. Cannot reliably extract semantic intent from opcodes.
+  </Card>
+  
+  <Card title="Manual Whitelists" icon="list-check">
+    **Approach:** Maintain curated lists of "safe" contracts
+    
+    **Problem:** Does not scale. Requires constant maintenance. Centralization risk.
+  </Card>
+</CardGroup>
+
+## The Need for a Standard
+
+What's missing is a **standardized, machine-verifiable metadata layer** that:
+
+1. Lives alongside the contract code
+2. Describes semantic intent in structured form
+3. Can be discovered and parsed programmatically
+4. Provides preconditions, effects, and risk disclosures
+5. Enables agents to validate their actions before execution
+
+This is what IntentSpec provides.
+
+<Info>
+Smart contracts are primarily documented for human auditors. Automated agents interacting with contracts must infer intent from naming conventions or sparse NatSpec comments, which may be ambiguous or incomplete.
+</Info>

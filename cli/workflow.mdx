@@ -1,0 +1,316 @@
+---
+title: Developer workflow
+description: Complete workflow from annotation to deployment
+---
+
+This guide walks through the complete developer workflow for using IntentSpec, from annotating your Solidity contracts to deploying metadata for agent discovery.
+
+## Overview
+
+The IntentSpec workflow consists of four main steps:
+
+<Steps>
+  <Step title="Annotate">
+    Add `@custom:agent-*` NatSpec tags to your Solidity contracts
+  </Step>
+  
+  <Step title="Generate">
+    Run the CLI to extract metadata and generate JSON files
+  </Step>
+  
+  <Step title="Publish">
+    Upload the generated JSON to IPFS or another content-addressed storage
+  </Step>
+  
+  <Step title="Deploy">
+    Update your contract to return the metadata URI via `getIntentSpecURI()`
+  </Step>
+</Steps>
+
+## Step 1: Annotate your contracts
+
+Start by adding NatSpec tags to your Solidity contract. Use contract-level tags above the `contract` declaration and function-level tags above each function.
+
+### Contract-level annotations
+
+```solidity
+/**
+ * @custom:agent-version 1.0
+ * @custom:agent-description Proxy contract for user operations; only owner or designated user can execute.
+ * @custom:agent-invariant owner and user are set at construction and immutable.
+ * @custom:agent-invariant Only owner or user can call protected functions unless documented otherwise.
+ * @custom:agent-event Executed Emitted when an external call is executed; includes target and success.
+ * @custom:agent-event TokensWithdrawn Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn.
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+### Function-level annotations
+
+```solidity
+/**
+ * @dev Withdraw a specific amount of ERC20 tokens
+ * @custom:agent-intent Withdraw a specific amount of ERC20 tokens to an address.
+ * @custom:agent-precondition Caller is owner or user.
+ * @custom:agent-precondition token and to are non-zero; amount > 0 and balance sufficient.
+ * @custom:agent-effect Balance of this contract decreases; to receives tokens. Emits TokensWithdrawn.
+ * @custom:agent-risk Irreversible transfer.
+ */
+function withdrawERC20(address token, address to, uint256 amount) external {
+  // ...
+}
+```
+
+<Info>
+  Only functions with `@custom:agent-intent` are included in the generated spec. This tag is **required** for function-level metadata.
+</Info>
+
+For a complete reference of all available tags, see the [NatSpec tags documentation](/natspec/overview).
+
+## Step 2: Generate metadata
+
+Once your contracts are annotated, use the CLI to generate JSON metadata.
+
+### Option 1: Generate for entire project
+
+Run this from your project root:
+
+```bash
+intentspec compile
+```
+
+This scans all `.sol` files in your project and generates `intentspec/<ContractName>.json` for each annotated contract.
+
+### Option 2: Generate for a single contract
+
+To inspect a single contract's metadata:
+
+```bash
+intentspec extract-natspec -f contracts/UserProxy.sol
+```
+
+This outputs JSON to stdout without writing a file.
+
+### Verify the output
+
+Inspect the generated JSON to ensure it matches your expectations:
+
+```bash
+cat intentspec/UserProxy.json | jq .
+```
+
+You should see:
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0",
+    "description": "Proxy contract for user operations; only owner or designated user can execute."
+  },
+  "functions": [
+    {
+      "name": "withdrawERC20",
+      "signature": "0x44004cc1",
+      "intent": "Withdraw a specific amount of ERC20 tokens to an address.",
+      "preconditions": [
+        "Caller is owner or user.",
+        "token and to are non-zero; amount > 0 and balance sufficient."
+      ],
+      "effects": [
+        "Balance of this contract decreases; to receives tokens. Emits TokensWithdrawn."
+      ],
+      "risks": ["Irreversible transfer."]
+    }
+  ],
+  "events": [
+    {
+      "name": "TokensWithdrawn",
+      "description": "Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn."
+    }
+  ],
+  "invariants": [
+    "owner and user are set at construction and immutable.",
+    "Only owner or user can call protected functions unless documented otherwise."
+  ]
+}
+```
+
+## Step 3: Publish to IPFS
+
+Upload the generated JSON to IPFS or another content-addressed storage service.
+
+### Using Pinata
+
+```bash
+curl -X POST https://api.pinata.cloud/pinning/pinFileToIPFS \
+  -H "Authorization: Bearer YOUR_PINATA_JWT" \
+  -F file=@intentspec/UserProxy.json
+```
+
+Response:
+
+```json
+{
+  "IpfsHash": "QmX7Zd8h5fQ3kY9vW2pL1nM8jR4tB6sC5eA3gH9iJ0kL7m",
+  "PinSize": 1234,
+  "Timestamp": "2024-01-15T10:30:00.000Z"
+}
+```
+
+### Using Web3.Storage
+
+```bash
+w3 up intentspec/UserProxy.json
+```
+
+### Using Kubo (local IPFS node)
+
+```bash
+ipfs add intentspec/UserProxy.json
+```
+
+<Warning>
+  Make sure to pin your file to prevent it from being garbage collected.
+</Warning>
+
+For detailed publishing instructions, see [Publishing metadata](/integration/publishing-metadata).
+
+## Step 4: Deploy with metadata URI
+
+Update your contract to implement the `IIntentSpec` interface and return the IPFS hash.
+
+```solidity
+import "./IIntentSpec.sol";
+
+contract UserProxy is IIntentSpec {
+  // ... existing contract code ...
+  
+  function getIntentSpecURI() external pure override returns (string memory) {
+    return "ipfs://QmX7Zd8h5fQ3kY9vW2pL1nM8jR4tB6sC5eA3gH9iJ0kL7m";
+  }
+  
+  function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+    return interfaceId == type(IIntentSpec).interfaceId;
+  }
+}
+```
+
+Deploy this updated contract, and agents will be able to discover your metadata by calling `getIntentSpecURI()`.
+
+## Updating metadata
+
+When you modify your contract's NatSpec annotations:
+
+<Steps>
+  <Step title="Regenerate JSON">
+    Run `intentspec compile` again to update the JSON files
+  </Step>
+  
+  <Step title="Upload new version">
+    Upload the updated JSON to IPFS (you'll get a new hash)
+  </Step>
+  
+  <Step title="Update contract">
+    For upgradeable contracts, update `getIntentSpecURI()` to return the new hash. For immutable contracts, deploy a new version.
+  </Step>
+</Steps>
+
+<Info>
+  Consider using upgradeable proxy patterns (e.g., UUPS, Transparent Proxy) if you anticipate frequent metadata updates.
+</Info>
+
+## Automation
+
+### GitHub Actions
+
+Automate spec generation and IPFS upload:
+
+```yaml .github/workflows/intentspec.yml
+name: Generate and Publish IntentSpec
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish-specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Generate IntentSpec
+        run: npx intentspec compile
+      
+      - name: Upload to IPFS
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          for file in intentspec/*.json; do
+            curl -X POST https://api.pinata.cloud/pinning/pinFileToIPFS \
+              -H "Authorization: Bearer $PINATA_JWT" \
+              -F file=@$file
+          done
+```
+
+### Pre-commit hook
+
+Keep specs in sync with your contracts:
+
+```bash .husky/pre-commit
+#!/bin/sh
+npx intentspec compile
+git add intentspec/
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Write clear, concise annotations">
+    Keep intent statements to one line. Use preconditions, effects, and risks for details.
+  </Accordion>
+  
+  <Accordion title="Annotate all public functions">
+    Even simple getters benefit from `@custom:agent-intent` to clarify their purpose.
+  </Accordion>
+  
+  <Accordion title="Use repeatable tags">
+    You can specify multiple `@custom:agent-precondition`, `@custom:agent-effect`, and `@custom:agent-risk` tags. They'll be combined into arrays in the JSON.
+  </Accordion>
+  
+  <Accordion title="Version your metadata">
+    Use `@custom:agent-version` to track contract versions. Update this whenever you change the contract logic.
+  </Accordion>
+  
+  <Accordion title="Pin to IPFS">
+    Always pin your metadata to prevent it from being garbage collected.
+  </Accordion>
+  
+  <Accordion title="Test with agents">
+    Verify that agents can fetch and parse your metadata correctly before deploying to mainnet.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="NatSpec tags reference" icon="tags" href="/natspec/overview">
+    Complete reference for all available tags
+  </Card>
+  <Card title="Publishing metadata" icon="upload" href="/integration/publishing-metadata">
+    Detailed guide for IPFS and other storage options
+  </Card>
+  <Card title="IIntentSpec interface" icon="code" href="/integration/iintentspec-interface">
+    Implement the interface in your contracts
+  </Card>
+  <Card title="Agent discovery" icon="magnifying-glass" href="/integration/agent-discovery">
+    How agents discover and use your metadata
+  </Card>
+</CardGroup>

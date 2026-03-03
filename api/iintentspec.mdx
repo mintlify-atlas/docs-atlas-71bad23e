@@ -1,0 +1,84 @@
+---
+title: "IIntentSpec"
+description: "Solidity interface for exposing Intent Spec metadata URI"
+---
+
+## Overview
+
+The `IIntentSpec` interface allows Solidity contracts to expose a URI pointing to their Intent Spec JSON metadata (e.g., IPFS hash or HTTPS URL). Contracts implementing this interface can be automatically discovered and documented by agents.
+
+## Interface Definition
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IIntentSpec {
+    function getIntentSpecURI() external view returns (string memory);
+}
+```
+
+Source: `solidity/IIntentSpec.sol:6-10`
+
+## Functions
+
+### getIntentSpecURI()
+
+Returns the URI where the Intent Spec JSON for this contract is stored.
+
+```solidity
+function getIntentSpecURI() external view returns (string memory);
+```
+
+<ParamField query="none" type="void">
+  This function takes no parameters.
+</ParamField>
+
+<ResponseField name="uri" type="string">
+  The URI pointing to the intentspec.json file. Can be an IPFS URI (e.g., `ipfs://Qm...`) or HTTPS URL (e.g., `https://example.com/intentspec.json`).
+</ResponseField>
+
+## Usage Example
+
+### Implementing the Interface
+
+```solidity
+import "./IIntentSpec.sol";
+
+contract MyContract is IIntentSpec {
+    function getIntentSpecURI() external view returns (string memory) {
+        return "ipfs://QmXyZ123...";
+    }
+    
+    // Your contract functions...
+}
+```
+
+### Querying from TypeScript
+
+```typescript
+import { ethers } from "ethers";
+
+const IIntentSpecABI = [
+  "function getIntentSpecURI() external view returns (string)"
+];
+
+const contract = new ethers.Contract(contractAddress, IIntentSpecABI, provider);
+const uri = await contract.getIntentSpecURI();
+console.log("Intent Spec URI:", uri);
+```
+
+## URI Formats
+
+Supported URI schemes:
+
+- **IPFS**: `ipfs://Qm...` or `ipfs://bafy...`
+- **HTTPS**: `https://example.com/path/to/intentspec.json`
+- **On-chain**: `data:application/json;base64,...` (for small specs)
+
+## Best Practices
+
+1. **Use IPFS for immutability**: Store your Intent Spec on IPFS to ensure it cannot be changed after deployment.
+2. **Version your specs**: Include version information in the JSON to track changes over time.
+3. **Keep URIs permanent**: Avoid using URLs that might break or change.
+4. **Validate JSON**: Ensure your Intent Spec JSON conforms to the schema before publishing.

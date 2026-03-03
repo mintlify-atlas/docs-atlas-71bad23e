@@ -1,0 +1,165 @@
+---
+title: Function Selectors
+description: How EVM function selectors are computed in IntentSpec
+---
+
+## Overview
+
+IntentSpec automatically computes EVM function selectors for each function in your Solidity contract. The selector is the first 4 bytes of the keccak256 hash of the function signature and is stored in the `signature` field.
+
+## Function Selector Format
+
+Function selectors in IntentSpec are represented as:
+- Hexadecimal strings
+- Prefixed with `0x`
+- Exactly 8 hex characters (4 bytes)
+- Example: `0x1cff79cd`
+
+## Computation Algorithm
+
+The function selector is computed using the following steps:
+
+### 1. Extract Function Name and Parameters
+
+The parser extracts the function name and parameter types from the Solidity function declaration:
+
+```typescript
+const rest = content.slice(functionStartIndex);
+const headerMatch = rest.match(/^\s*function\s+(\w+)\s*\(/);
+const name = headerMatch[1];
+```
+
+### 2. Parse Parameter Types
+
+Parameter types are extracted from the function parameter list, ignoring storage location keywords (`memory`, `calldata`, `storage`):
+
+```typescript
+function extractTypeFromParam(part: string): string {
+  const tokens = part.split(/\s+/).filter((t) => !["memory", "calldata", "storage"].includes(t));
+  if (tokens.length === 0) return "address";
+  const typePart = tokens.length === 1 ? tokens[0] : tokens.slice(0, -1).join(" ");
+  return canonicalType(typePart);
+}
+```
+
+### 3. Canonicalize Types
+
+Solidity types are normalized to their canonical forms:
+
+```typescript
+function canonicalType(raw: string): string {
+  const t = raw.trim();
+  if (t === "uint") return "uint256";
+  if (t === "int") return "int256";
+  if (t === "byte") return "bytes1";
+  return t;
+}
+```
+
+**Type conversions:**
+- `uint` → `uint256`
+- `int` → `int256`
+- `byte` → `bytes1`
+
+### 4. Build Function Signature
+
+The canonical signature is constructed as `functionName(type1,type2,...)`:
+
+```typescript
+const signature = `${name}(${types.join(",")})`;
+```
+
+**Important:** No spaces between parameter types!
+
+### 5. Compute keccak256 Hash
+
+The signature string is hashed using keccak256:
+
+```typescript
+import { keccak256 } from "ethereum-cryptography/keccak.js";
+
+const hash = keccak256(Buffer.from(signature, "utf8"));
+```
+
+### 6. Extract First 4 Bytes
+
+The selector is the first 4 bytes of the hash, formatted as hexadecimal:
+
+```typescript
+const selector = hash.slice(0, 4);
+return "0x" + Buffer.from(selector).toString("hex");
+```
+
+## Complete Implementation
+
+Here's the full `functionSelectorHex` function from `cli/src/natspec.ts`:
+
+```typescript
+function functionSelectorHex(content: string, functionStartIndex: number): string | undefined {
+  const rest = content.slice(functionStartIndex);
+  const headerMatch = rest.match(/^\s*function\s+(\w+)\s*\(/);
+  if (!headerMatch) return undefined;
+  const name = headerMatch[1];
+  const openParen = functionStartIndex + headerMatch[0].length - 1;
+  let depth = 1;
+  let closeParen = openParen + 1;
+  for (; closeParen < content.length && depth > 0; closeParen++) {
+    const c = content[closeParen];
+    if (c === "(") depth++;
+    else if (c === ")") depth--;
+  }
+  if (depth !== 0) return undefined;
+  const paramList = content.slice(openParen + 1, closeParen - 1);
+  const types = parseParamTypes(paramList);
+  const signature = `${name}(${types.join(",")})`;
+  const hash = keccak256(Buffer.from(signature, "utf8"));
+  const selector = hash.slice(0, 4);
+  return "0x" + Buffer.from(selector).toString("hex");
+}
+```
+
+## Examples
+
+### Simple Function
+
+```solidity
+function transfer(address to, uint256 amount) external returns (bool)
+```
+
+- Function name: `transfer`
+- Parameter types: `["address", "uint256"]`
+- Signature: `transfer(address,uint256)`
+- Selector: `0xa9059cbb`
+
+### Function with Storage Locations
+
+```solidity
+function execute(address target, bytes calldata data) external
+```
+
+- Function name: `execute`
+- Parameter types: `["address", "bytes"]` (calldata is stripped)
+- Signature: `execute(address,bytes)`
+- Selector: `0x1cff79cd`
+
+### Function with Canonical Types
+
+```solidity
+function deposit(uint amount) payable external
+```
+
+- Function name: `deposit`
+- Parameter types: `["uint256"]` (uint → uint256)
+- Signature: `deposit(uint256)`
+- Selector: `0xb6b55f25`
+
+## Verification
+
+You can verify function selectors using:
+
+```bash
+cast sig "transfer(address,uint256)"
+# Output: 0xa9059cbb
+```
+
+Or using online tools like [4byte.directory](https://www.4byte.directory/).

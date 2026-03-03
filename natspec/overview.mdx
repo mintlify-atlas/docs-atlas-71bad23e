@@ -1,0 +1,66 @@
+---
+title: NatSpec Tags Overview
+description: Introduction to agent-readable NatSpec tags in IntentSpec
+---
+
+IntentSpec uses custom NatSpec tags to extract agent-readable metadata from Solidity contracts. These tags enable AI agents and automated tools to understand contract behavior, preconditions, effects, and risks.
+
+## Tag Categories
+
+IntentSpec defines two categories of tags:
+
+1. **Contract-level tags** - Placed in the block comment above the contract declaration
+2. **Function-level tags** - Placed in the block comment above each function
+
+## How Tags Work
+
+All IntentSpec tags follow the `@custom:agent-*` pattern and are placed in standard Solidity block comments (`/** ... */`).
+
+```solidity
+/**
+ * @custom:agent-version 1.0
+ * @custom:agent-description Proxy for user operations.
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+## Tag Inclusion Rules
+
+- **Contract-level tags** are all optional but recommended for complete documentation
+- **Function-level tags**: Only `@custom:agent-intent` is required
+- Functions **without** `@custom:agent-intent` are excluded from the generated spec
+- Tags like `@custom:agent-precondition`, `@custom:agent-effect`, and `@custom:agent-risk` can appear multiple times and become arrays in the JSON output
+
+## Output Format
+
+Tags are extracted and compiled into schema-compliant JSON:
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0",
+    "description": "Proxy for user operations."
+  },
+  "functions": [
+    {
+      "name": "withdrawERC20",
+      "signature": "0x44004cc1",
+      "intent": "Withdraw a specific amount of ERC20 tokens to an address.",
+      "preconditions": ["Caller is owner or user."],
+      "effects": ["Balance decreases; to receives tokens."],
+      "risks": ["Irreversible transfer."]
+    }
+  ],
+  "events": [],
+  "invariants": []
+}
+```
+
+## Next Steps
+
+- [Contract-Level Tags](/natspec/contract-level-tags) - Document contract metadata, invariants, and events
+- [Function-Level Tags](/natspec/function-level-tags) - Document function intents, preconditions, effects, and risks
+- [Examples](/natspec/examples) - Real-world examples from the codebase

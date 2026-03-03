@@ -1,0 +1,223 @@
+---
+title: extract-natspec command
+description: Extract IntentSpec metadata from a single Solidity file and output to stdout
+---
+
+The `extract-natspec` command reads a single Solidity file, extracts IntentSpec metadata from it, and prints the JSON to stdout (no file written). This is useful for quick inspection or piping into other tools.
+
+## Usage
+
+<CodeGroup>
+```bash Basic usage
+intentspec extract-natspec --file contracts/MyContract.sol
+```
+
+```bash Short form
+intentspec extract-natspec -f ./src/UserProxy.sol
+```
+
+```bash Pipe to jq
+intentspec extract-natspec -f contracts/Token.sol | jq .
+```
+
+```bash Redirect to file
+intentspec extract-natspec -f contracts/Token.sol > token-spec.json
+```
+</CodeGroup>
+
+## Options
+
+<ParamField path="file" type="string" required>
+  Path to the Solidity file to extract metadata from. The path is resolved relative to the current working directory.
+  
+  **Alias:** `-f`
+</ParamField>
+
+## Output
+
+The command outputs JSON to stdout in the following format:
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0",
+    "description": "Proxy for user operations."
+  },
+  "functions": [
+    {
+      "name": "withdrawERC20",
+      "signature": "0x44004cc1",
+      "intent": "Withdraw a specific amount of ERC20 tokens to an address.",
+      "preconditions": ["Caller is owner or user.", "token and to are non-zero."],
+      "effects": ["Balance decreases; to receives tokens. Emits TokensWithdrawn."],
+      "risks": ["Irreversible transfer."]
+    }
+  ],
+  "events": [
+    { "name": "TokensWithdrawn", "description": "Emitted when tokens are withdrawn." }
+  ],
+  "invariants": ["owner and user are set at construction and immutable."]
+}
+```
+
+Log messages (like `Reading contracts/UserProxy.sol`) are written to stderr, so they don't interfere with JSON output to stdout.
+
+## Common use cases
+
+### Quick inspection
+
+Inspect a single contract's metadata without writing files:
+
+```bash
+intentspec extract-natspec -f contracts/UserProxy.sol
+```
+
+### Pretty-print with jq
+
+Format and colorize the JSON output:
+
+```bash
+intentspec extract-natspec -f contracts/Token.sol | jq .
+```
+
+### Filter specific fields
+
+Extract only function names:
+
+```bash
+intentspec extract-natspec -f contracts/Token.sol | jq '.functions[].name'
+```
+
+### Save to a custom location
+
+Redirect output to a specific file:
+
+```bash
+intentspec extract-natspec -f contracts/Token.sol > docs/token-spec.json
+```
+
+### Validate with a JSON schema validator
+
+```bash
+intentspec extract-natspec -f contracts/Token.sol | \
+  ajv validate -s schema/intentspec.schema.json
+```
+
+### Upload to IPFS directly
+
+```bash
+intentspec extract-natspec -f contracts/Token.sol | \
+  curl -X POST -F file=@- https://api.pinata.cloud/pinning/pinFileToIPFS
+```
+
+## Integration examples
+
+### Node.js script
+
+Process the JSON output in a Node.js script:
+
+```javascript
+import { execSync } from 'child_process';
+
+const output = execSync(
+  'intentspec extract-natspec -f contracts/Token.sol',
+  { encoding: 'utf-8' }
+);
+
+const spec = JSON.parse(output);
+console.log(`Contract: ${spec.contract.name}`);
+console.log(`Functions: ${spec.functions.length}`);
+```
+
+### Python script
+
+Process the output in Python:
+
+```python
+import subprocess
+import json
+
+result = subprocess.run(
+    ['intentspec', 'extract-natspec', '-f', 'contracts/Token.sol'],
+    capture_output=True,
+    text=True
+)
+
+spec = json.loads(result.stdout)
+print(f"Contract: {spec['contract']['name']}")
+print(f"Functions: {len(spec['functions'])}")
+```
+
+### Makefile
+
+Add to your project's `Makefile`:
+
+```makefile
+.PHONY: spec
+spec:
+	@intentspec extract-natspec -f contracts/Token.sol | jq .
+
+.PHONY: spec-save
+spec-save:
+	@intentspec extract-natspec -f contracts/Token.sol > spec/token.json
+```
+
+Then run:
+
+```bash
+make spec        # View the spec
+make spec-save   # Save to file
+```
+
+## Error handling
+
+### File not found
+
+```
+error - Failed to read file: contracts/Missing.sol
+Ensure the file contains a contract declaration and valid NatSpec.
+```
+
+**Solution:** Check that the file path is correct and the file exists.
+
+### No contract declaration
+
+```
+error - File does not contain a contract declaration
+Ensure the file contains a contract declaration and valid NatSpec.
+```
+
+**Solution:** The file must contain a `contract ContractName {` declaration. Interfaces and libraries are not supported.
+
+### No valid NatSpec
+
+```
+error - No functions with @custom:agent-intent found
+Ensure the file contains a contract declaration and valid NatSpec.
+```
+
+**Solution:** Add `@custom:agent-intent` to at least one function in the contract.
+
+## Differences from compile
+
+| Feature | `extract-natspec` | `compile` |
+|---------|-------------------|----------|
+| **Input** | Single file | Entire directory (recursive) |
+| **Output** | stdout (JSON) | File(s) in `intentspec/` |
+| **Use case** | Inspection, piping, debugging | Project-wide generation |
+| **File creation** | None | One `.json` per contract |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="compile command" icon="folder-tree" href="/cli/compile-command">
+    Generate specs for multiple contracts at once
+  </Card>
+  <Card title="JSON schema" icon="brackets-curly" href="/schema/json-schema">
+    Learn about the IntentSpec JSON schema
+  </Card>
+  <Card title="Publishing metadata" icon="upload" href="/integration/publishing-metadata">
+    Upload specs to IPFS or other storage
+  </Card>
+</CardGroup>

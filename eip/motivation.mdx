@@ -1,0 +1,25 @@
+---
+title: Motivation
+description: Why EIP-8174 is needed for autonomous agent interaction
+---
+
+This ERC is complementary to [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004).
+
+[ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) defines infrastructure primitives for autonomous agents, including identity, reputation, and validation mechanisms. It standardizes how agents establish identity and trust.
+
+This ERC defines a structured semantic documentation layer for smart contracts. It standardizes how contract behavior is described and interpreted prior to execution.
+
+Together, these standards address complementary layers of autonomous agent interaction.
+
+## The Problem
+
+Smart contracts are primarily documented for human auditors. Automated agents interacting with contracts must infer intent from naming conventions or sparse NatSpec comments, which may be ambiguous or incomplete.
+
+The ABI provides function signatures and parameter types but does not express:
+
+- Economic intent
+- Safety preconditions
+- Irreversible effects
+- Risk disclosures
+
+This proposal defines a standardized documentation layer enabling structured semantic disclosure at the contract level.

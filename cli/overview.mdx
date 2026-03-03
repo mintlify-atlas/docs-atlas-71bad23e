@@ -1,0 +1,124 @@
+---
+title: CLI overview
+description: Command-line tool for extracting agent-readable metadata from Solidity contracts
+---
+
+The IntentSpec CLI is a command-line tool that extracts agent-readable metadata from Solidity contracts using custom NatSpec tags and emits schema-compliant JSON.
+
+## What it does
+
+The CLI performs two main functions:
+
+1. **Parse Solidity files** for `@custom:agent-*` NatSpec tags
+2. **Generate JSON metadata** conforming to the IntentSpec schema
+
+The generated JSON files can be published to IPFS, served via HTTPS, or stored on-chain for agent discovery.
+
+## Requirements
+
+- **Node.js** ≥ 18
+- Solidity contracts with `@custom:agent-*` NatSpec tags
+
+## Commands
+
+The CLI provides two commands:
+
+<CardGroup cols={2}>
+  <Card title="compile" icon="folder-tree" href="/cli/compile-command">
+    Scan a directory for all `.sol` files and generate spec files for each contract
+  </Card>
+  <Card title="extract-natspec" icon="file-code" href="/cli/extract-natspec-command">
+    Extract metadata from a single Solidity file and output to stdout
+  </Card>
+</CardGroup>
+
+## Output format
+
+The CLI generates one JSON file per contract, following this structure:
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0",
+    "description": "Proxy for user operations."
+  },
+  "functions": [
+    {
+      "name": "withdrawERC20",
+      "signature": "0x44004cc1",
+      "intent": "Withdraw a specific amount of ERC20 tokens to an address.",
+      "preconditions": ["Caller is owner or user.", "token and to are non-zero."],
+      "effects": ["Balance decreases; to receives tokens. Emits TokensWithdrawn."],
+      "risks": ["Irreversible transfer."],
+      "agentGuidance": "Check balance first."
+    }
+  ],
+  "events": [
+    { "name": "TokensWithdrawn", "description": "Emitted when tokens are withdrawn." }
+  ],
+  "invariants": ["owner and user are set at construction and immutable."]
+}
+```
+
+<Info>
+  The `signature` field contains the EVM function selector (first 4 bytes of `keccak256(functionSignature)`) in hexadecimal format.
+</Info>
+
+## How it works
+
+The CLI follows this process:
+
+<Steps>
+  <Step title="Find Solidity files">
+    Recursively scans the specified directory for `.sol` files (excluding `node_modules` and `.git`)
+  </Step>
+  
+  <Step title="Parse NatSpec comments">
+    Extracts `/** ... */` block comments and identifies `@custom:agent-*` tags
+  </Step>
+  
+  <Step title="Map tags to schema">
+    Converts contract-level and function-level tags to the IntentSpec JSON schema
+  </Step>
+  
+  <Step title="Compute function selectors">
+    Generates EVM function selectors using keccak256 hashing
+  </Step>
+  
+  <Step title="Write JSON files">
+    Outputs one `.json` file per contract to the `intentspec/` directory
+  </Step>
+</Steps>
+
+## When to use each command
+
+### Use `compile` when:
+
+- You want to generate specs for an entire project
+- You're setting up CI/CD to auto-generate specs
+- You need to process multiple contracts at once
+
+### Use `extract-natspec` when:
+
+- You want to inspect a single contract's metadata
+- You need to pipe the output to another tool (e.g., `jq`)
+- You're debugging NatSpec annotations
+- You want to integrate the output into a custom build process
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="compile command" icon="folder-tree" href="/cli/compile-command">
+    Learn how to batch process multiple contracts
+  </Card>
+  <Card title="extract-natspec command" icon="file-code" href="/cli/extract-natspec-command">
+    Extract metadata from a single file
+  </Card>
+  <Card title="Developer workflow" icon="diagram-project" href="/cli/workflow">
+    See the complete annotate → generate → publish workflow
+  </Card>
+  <Card title="NatSpec tags" icon="tags" href="/natspec/overview">
+    Reference for all available NatSpec tags
+  </Card>
+</CardGroup>

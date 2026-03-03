@@ -1,0 +1,74 @@
+---
+title: "UserProxy Contract Overview"
+description: "A complete example of an IntentSpec-annotated Solidity contract"
+---
+
+## Introduction
+
+The UserProxy contract is a fully-annotated example demonstrating how to use IntentSpec's custom NatSpec tags to generate agent-readable metadata. This contract implements a proxy pattern that allows an owner or designated user to execute arbitrary contract calls, manage token approvals, and withdraw various token types.
+
+## Contract Purpose
+
+UserProxy serves as a secure proxy for user operations with the following features:
+
+- **Dual Authorization**: Both owner and user addresses can execute operations
+- **Multi-Token Support**: Handles ETH, ERC20, ERC721, and ERC1155 tokens
+- **Automatic Approvals**: Can approve ERC20 tokens before executing calls
+- **Emergency Functions**: Provides emergency withdrawal capabilities
+
+## Key Annotations
+
+The contract uses IntentSpec's custom NatSpec tags to document:
+
+### Contract-Level Metadata
+
+- `@custom:agent-version`: Specifies the contract version (1.0)
+- `@custom:agent-description`: High-level description of contract purpose
+- `@custom:agent-invariant`: Contract-wide invariants that always hold
+- `@custom:agent-event`: Documentation for emitted events
+
+### Function-Level Metadata
+
+- `@custom:agent-intent`: What the function is meant to accomplish
+- `@custom:agent-precondition`: Requirements that must be met before execution
+- `@custom:agent-effect`: Changes the function makes to contract state
+- `@custom:agent-risk`: Potential risks or security considerations
+- `@custom:agent-guidance`: Best practices for calling the function
+
+## Annotated Functions
+
+The contract includes two fully-annotated functions:
+
+### exec()
+
+The primary execution function that:
+- Validates caller permissions
+- Optionally approves ERC20 tokens
+- Executes arbitrary external calls
+- Properly propagates errors
+
+### withdrawERC20()
+
+A token withdrawal function that:
+- Transfers specific amounts of ERC20 tokens
+- Validates balances and addresses
+- Emits appropriate events
+
+## Generated Output
+
+IntentSpec processes these annotations to generate structured JSON metadata that agents can use to:
+
+1. Understand contract capabilities
+2. Validate preconditions before transactions
+3. Predict transaction effects
+4. Assess risks
+5. Follow best practices
+
+See the [annotated contract walkthrough](/examples/annotated-contract) for detailed explanations of each annotation, and the [generated JSON](/examples/generated-json) to see the final output.
+
+## File Location
+
+The complete source code is available at:
+```
+example/UserProxy.sol
+```

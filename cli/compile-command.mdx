@@ -1,0 +1,206 @@
+---
+title: compile command
+description: Scan a directory for Solidity files and generate IntentSpec metadata for each contract
+---
+
+The `compile` command scans a directory for all `.sol` files (recursively, excluding `node_modules` and `.git`), extracts IntentSpec metadata from each file that contains a contract with valid NatSpec, and writes one JSON file per contract into an `intentspec/` folder.
+
+## Usage
+
+<CodeGroup>
+```bash Current directory
+intentspec compile
+```
+
+```bash Specific directory
+intentspec compile --dir /path/to/contracts
+```
+
+```bash Short form
+intentspec compile -d ./src
+```
+</CodeGroup>
+
+## Options
+
+<ParamField path="dir" type="string" default=".">
+  Root directory to search for `.sol` files. The CLI will recursively scan this directory and all subdirectories (excluding `node_modules` and `.git`).
+  
+  **Alias:** `-d`
+</ParamField>
+
+## Behavior
+
+The `compile` command follows this process:
+
+<Steps>
+  <Step title="Scan for Solidity files">
+    Recursively searches the specified directory for all `.sol` files, excluding:
+    - `node_modules/`
+    - `.git/`
+  </Step>
+  
+  <Step title="Create output directory">
+    Creates an `intentspec/` folder in the root directory you specified
+  </Step>
+  
+  <Step title="Extract metadata">
+    For each `.sol` file that contains:
+    - A `contract` declaration
+    - At least one function with `@custom:agent-intent`
+    
+    Writes `intentspec/<ContractName>.json`
+  </Step>
+  
+  <Step title="Skip invalid files">
+    Files that do not declare a contract or have no valid agent NatSpec are skipped with a warning
+  </Step>
+</Steps>
+
+## Example output
+
+When you run the compile command, you'll see output like this:
+
+```bash
+$ intentspec compile
+Scanning for .sol files in current directory
+Found 3 .sol file(s)
+Creating output directory: intentspec/
+Wrote intentspec/UserProxy.json from contracts/UserProxy.sol
+Wrote intentspec/TokenVault.json from contracts/TokenVault.sol
+Skipped contracts/Helper.sol (no contract or invalid spec)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Compilation complete: 2 spec(s) written to intentspec/
+
+Next steps:
+- Inspect generated files in ./intentspec/
+- Publish specs (e.g. IPFS) and update on-chain pointer when ready.
+- Run intentspec compile again after changing NatSpec in your contracts.
+```
+
+## Common use cases
+
+### Generate specs for an entire project
+
+```bash
+cd my-solidity-project
+intentspec compile
+```
+
+This scans the current directory and all subdirectories for `.sol` files and generates JSON specs in `./intentspec/`.
+
+### Process a specific contracts folder
+
+```bash
+intentspec compile --dir ./contracts
+```
+
+This scans only the `./contracts` directory and its subdirectories.
+
+### CI/CD integration
+
+Add this to your GitHub Actions workflow:
+
+```yaml .github/workflows/intentspec.yml
+name: Generate IntentSpec
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  generate-specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Generate IntentSpec
+        run: npx intentspec compile
+      
+      - name: Upload specs
+        uses: actions/upload-artifact@v3
+        with:
+          name: intentspec
+          path: intentspec/
+```
+
+### Pre-commit hook
+
+Add this to `.husky/pre-commit`:
+
+```bash
+#!/bin/sh
+npx intentspec compile
+git add intentspec/
+```
+
+This regenerates specs before each commit to keep them in sync with your contracts.
+
+## Errors and warnings
+
+### No Solidity files found
+
+```
+warning - No Solidity files found.
+- Add .sol files with contract declarations and @custom:agent-* NatSpec, then run again.
+```
+
+**Solution:** Ensure you're in the correct directory and your Solidity files have the `.sol` extension.
+
+### No contracts with valid NatSpec
+
+```
+warning - No contracts with valid NatSpec were found.
+- Add @custom:agent-intent (and optional agent-precondition, agent-effect, etc.) above functions.
+- Add a contract-level NatSpec block above your contract for version, description, invariants, events.
+```
+
+**Solution:** Add `@custom:agent-intent` tags to at least one function in your contracts. See the [NatSpec tags reference](/natspec/overview) for details.
+
+### Files skipped
+
+```
+Skipped contracts/Helper.sol (no contract or invalid spec)
+```
+
+**Reason:** The file either:
+- Doesn't contain a `contract` declaration (e.g., it's just an interface or library)
+- Contains a contract but no functions with `@custom:agent-intent`
+
+This is normal for helper files and libraries.
+
+## Re-generating specs
+
+After modifying NatSpec annotations in your contracts, simply re-run:
+
+```bash
+intentspec compile
+```
+
+The CLI will overwrite existing JSON files with updated metadata.
+
+<Warning>
+  Make sure to republish your metadata (e.g., to IPFS) and update your contract's `getIntentSpecURI()` after regenerating specs.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="extract-natspec command" icon="file-code" href="/cli/extract-natspec-command">
+    Extract metadata from a single file
+  </Card>
+  <Card title="Developer workflow" icon="diagram-project" href="/cli/workflow">
+    See the complete workflow from annotation to deployment
+  </Card>
+  <Card title="Publishing metadata" icon="upload" href="/integration/publishing-metadata">
+    Learn how to publish specs to IPFS
+  </Card>
+</CardGroup>

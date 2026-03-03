@@ -1,0 +1,184 @@
+---
+title: Contract-Level Tags
+description: Document contract metadata, invariants, and events
+---
+
+Contract-level tags are placed in the block comment directly above the `contract` declaration. They provide high-level metadata about the contract's purpose, version, invariants, and events.
+
+## Available Tags
+
+| Tag | Purpose | Repeatable | Required |
+|-----|---------|------------|----------|
+| `@custom:agent-version` | Contract version identifier | No | No |
+| `@custom:agent-description` | Short description of contract purpose | No | No |
+| `@custom:agent-invariant` | Contract invariant that always holds | Yes | No |
+| `@custom:agent-event` | Event name and description | Yes | No |
+
+## @custom:agent-version
+
+Specifies the contract version. This helps agents track contract evolution and compatibility.
+
+**Format:**
+```solidity
+@custom:agent-version <version>
+```
+
+**Example:**
+```solidity
+/**
+ * @custom:agent-version 1.0
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+**JSON Output:**
+```json
+{
+  "contract": {
+    "version": "1.0"
+  }
+}
+```
+
+## @custom:agent-description
+
+Provides a concise description of what the contract does. Keep it brief and focused on the contract's primary purpose.
+
+**Format:**
+```solidity
+@custom:agent-description <description text>
+```
+
+**Example:**
+```solidity
+/**
+ * @custom:agent-description Proxy contract for user operations; only owner or designated user can execute.
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+**JSON Output:**
+```json
+{
+  "contract": {
+    "description": "Proxy contract for user operations; only owner or designated user can execute."
+  }
+}
+```
+
+## @custom:agent-invariant
+
+Documents conditions that always hold true for the contract. Invariants help agents understand contract guarantees and constraints. This tag can be repeated multiple times.
+
+**Format:**
+```solidity
+@custom:agent-invariant <invariant description>
+```
+
+**Example:**
+```solidity
+/**
+ * @custom:agent-invariant owner and user are set at construction and immutable.
+ * @custom:agent-invariant Only owner or user can call protected functions unless documented otherwise.
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+**JSON Output:**
+```json
+{
+  "invariants": [
+    "owner and user are set at construction and immutable.",
+    "Only owner or user can call protected functions unless documented otherwise."
+  ]
+}
+```
+
+## @custom:agent-event
+
+Documents important events emitted by the contract. Specify the event name followed by its description.
+
+**Format:**
+```solidity
+@custom:agent-event <EventName> <description>
+```
+
+**Example:**
+```solidity
+/**
+ * @custom:agent-event Executed Emitted when an external call is executed; includes target and success.
+ * @custom:agent-event TokensWithdrawn Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn.
+ * @custom:agent-event ETHWithdrawn Emitted when ETH is withdrawn.
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+**JSON Output:**
+```json
+{
+  "events": [
+    {
+      "name": "Executed",
+      "description": "Emitted when an external call is executed; includes target and success."
+    },
+    {
+      "name": "TokensWithdrawn",
+      "description": "Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn."
+    },
+    {
+      "name": "ETHWithdrawn",
+      "description": "Emitted when ETH is withdrawn."
+    }
+  ]
+}
+```
+
+## Complete Example
+
+Here's a complete contract-level annotation from UserProxy.sol:
+
+```solidity
+/**
+ * @custom:agent-version 1.0
+ * @custom:agent-description Proxy contract for user operations; only owner or designated user can execute.
+ * @custom:agent-invariant owner and user are set at construction and immutable.
+ * @custom:agent-invariant Only owner or user can call protected functions unless documented otherwise.
+ * @custom:agent-event Executed Emitted when an external call is executed; includes target and success.
+ * @custom:agent-event TokensWithdrawn Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn.
+ * @custom:agent-event ETHWithdrawn Emitted when ETH is withdrawn.
+ * @custom:agent-event TokenApproved Emitted when ERC20 approval is granted for a target.
+ */
+contract UserProxy {
+  // ...
+}
+```
+
+This produces:
+
+```json
+{
+  "contract": {
+    "name": "UserProxy",
+    "version": "1.0",
+    "description": "Proxy contract for user operations; only owner or designated user can execute."
+  },
+  "invariants": [
+    "owner and user are set at construction and immutable.",
+    "Only owner or user can call protected functions unless documented otherwise."
+  ],
+  "events": [
+    { "name": "Executed", "description": "Emitted when an external call is executed; includes target and success." },
+    { "name": "TokensWithdrawn", "description": "Emitted when ERC20/ERC721/ERC1155 tokens are withdrawn." },
+    { "name": "ETHWithdrawn", "description": "Emitted when ETH is withdrawn." },
+    { "name": "TokenApproved", "description": "Emitted when ERC20 approval is granted for a target." }
+  ]
+}
+```

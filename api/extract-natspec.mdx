@@ -1,0 +1,146 @@
+---
+title: "extractNatSpec"
+description: "Extract Intent Spec metadata from a Solidity file"
+---
+
+## Overview
+
+The `extractNatSpec()` function reads a Solidity file from disk and extracts Intent Spec metadata from NatSpec comments.
+
+## Function Signature
+
+```typescript
+export function extractNatSpec(filePath: string): ExtractOutcome
+```
+
+Source: `cli/src/natspec.ts:335-343`
+
+## Parameters
+
+<ParamField path="filePath" type="string" required>
+  Absolute or relative path to the Solidity file to parse. The file must contain a `contract` declaration.
+</ParamField>
+
+## Return Value
+
+<ResponseField name="ExtractOutcome" type="ExtractResult | ExtractError">
+  Returns either a success result with the extracted spec or an error with a reason.
+</ResponseField>
+
+### Success Response (ExtractResult)
+
+```typescript
+{
+  ok: true,
+  spec: IntentSpec
+}
+```
+
+<ResponseField name="ok" type="boolean">
+  Always `true` for successful extractions.
+</ResponseField>
+
+<ResponseField name="spec" type="IntentSpec">
+  The extracted Intent Spec object containing contract metadata, functions, events, and invariants.
+</ResponseField>
+
+### Error Response (ExtractError)
+
+```typescript
+{
+  ok: false,
+  reason: string
+}
+```
+
+<ResponseField name="ok" type="boolean">
+  Always `false` for failed extractions.
+</ResponseField>
+
+<ResponseField name="reason" type="string">
+  Human-readable error message explaining why extraction failed (e.g., "File does not contain a contract declaration" or "Failed to read file: /path/to/file.sol").
+</ResponseField>
+
+## Usage Examples
+
+### Basic Usage
+
+```typescript
+import { extractNatSpec } from "intentspec";
+
+const result = extractNatSpec("./contracts/MyContract.sol");
+
+if (result.ok) {
+  console.log("Contract:", result.spec.contract.name);
+  console.log("Functions:", result.spec.functions.length);
+  console.log(JSON.stringify(result.spec, null, 2));
+} else {
+  console.error("Extraction failed:", result.reason);
+}
+```
+
+### Processing Multiple Files
+
+```typescript
+import { extractNatSpec } from "intentspec";
+import { readdirSync } from "fs";
+import { join } from "path";
+
+const contractsDir = "./contracts";
+const files = readdirSync(contractsDir).filter(f => f.endsWith(".sol"));
+
+for (const file of files) {
+  const result = extractNatSpec(join(contractsDir, file));
+  if (result.ok) {
+    console.log(`✓ ${file}: ${result.spec.functions.length} functions`);
+  } else {
+    console.log(`✗ ${file}: ${result.reason}`);
+  }
+}
+```
+
+### Writing to JSON
+
+```typescript
+import { extractNatSpec } from "intentspec";
+import { writeFileSync } from "fs";
+
+const result = extractNatSpec("./contracts/UserProxy.sol");
+
+if (result.ok) {
+  writeFileSync(
+    "./intentspec.json",
+    JSON.stringify(result.spec, null, 2)
+  );
+  console.log("Intent Spec written to intentspec.json");
+}
+```
+
+## Error Handling
+
+The function returns errors in the following cases:
+
+1. **File not found or unreadable**: `"Failed to read file: <path>"`
+2. **No contract declaration**: `"File does not contain a contract declaration"`
+
+```typescript
+const result = extractNatSpec("./nonexistent.sol");
+
+if (!result.ok) {
+  switch (result.reason) {
+    case result.reason.startsWith("Failed to read file"):
+      console.error("File access error:", result.reason);
+      break;
+    case "File does not contain a contract declaration":
+      console.error("Not a valid contract file");
+      break;
+    default:
+      console.error("Unknown error:", result.reason);
+  }
+}
+```
+
+## Related Functions
+
+- [extractFromContent()](/api/extract-from-content) - Extract from string content instead of file
+- [Types Reference](/api/types) - TypeScript type definitions

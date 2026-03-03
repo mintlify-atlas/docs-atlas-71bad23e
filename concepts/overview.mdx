@@ -1,0 +1,81 @@
+---
+title: Core Concepts Overview
+description: Understanding the fundamental concepts behind IntentSpec
+---
+
+## What is IntentSpec?
+
+IntentSpec is an **agent-readable smart contract documentation layer** that bridges the semantic gap between onchain logic and autonomous reasoning.
+
+Onchain activity is increasingly driven by autonomous agents. Smart contracts, however, remain optimized for human auditors. Agents today infer behavior from function names and ABIs alone, which is brittle and error-prone.
+
+## The Core Innovation
+
+IntentSpec adds a standardized, machine-verifiable metadata layer so developers can declare a function's:
+
+- **Intent** - What the function is meant to accomplish
+- **Economic impact** - How it affects value and state
+- **Safety boundaries** - Preconditions, risks, and irreversible effects
+
+By turning opaque bytecode into structured semantics, IntentSpec reduces systemic risk and supports a safer agentic economy.
+
+## Key Components
+
+<CardGroup cols={2}>
+  <Card title="NatSpec Tags" icon="tag">
+    Custom `@custom:agent-*` tags embedded in Solidity comments to annotate contract behavior
+  </Card>
+  
+  <Card title="CLI Tool" icon="terminal">
+    Command-line tool that extracts metadata from Solidity files and generates schema-compliant JSON
+  </Card>
+  
+  <Card title="JSON Schema" icon="code">
+    Standardized structure for intent metadata that agents can parse without ambiguity
+  </Card>
+  
+  <Card title="IIntentSpec Interface" icon="link">
+    Solidity interface for onchain metadata discovery via `getIntentSpecURI()`
+  </Card>
+</CardGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Annotate">
+    Add `@custom:agent-*` NatSpec tags to your Solidity contracts describing intent, preconditions, effects, and risks.
+  </Step>
+  
+  <Step title="Generate">
+    Run the IntentSpec CLI to extract metadata and generate schema-strict JSON files.
+  </Step>
+  
+  <Step title="Publish">
+    Upload the generated spec to IPFS or another URI and implement `IIntentSpec` to expose the URI onchain.
+  </Step>
+  
+  <Step title="Discover">
+    Agents call `getIntentSpecURI()` to discover metadata, validate their goals against declared intent, and simulate before signing.
+  </Step>
+</Steps>
+
+## The Agent Loop
+
+With IntentSpec, agents follow a structured verification workflow:
+
+1. **Discover** - Retrieve the spec by calling `getIntentSpecURI()` or using a registry
+2. **Validate** - Check that their goal aligns with the declared intent and preconditions
+3. **Simulate** - Run local simulations to confirm state changes match the metadata
+4. **Execute** - Sign and submit the transaction with confidence
+
+This approach transforms agents from fragile pattern-matchers into constraint-based reasoners.
+
+## Why This Matters
+
+<Info>
+The EVM enforces **syntactic correctness** but not **semantic intent**. As LLM-driven agents begin to manage private keys, this "semantic gap" becomes critical. IntentSpec provides a ground-truth anchor for machine reasoning.
+</Info>
+
+Without structured metadata, agents must translate sparse ABIs into estimated intent - a process with high variance that leads to **agentic drift** and potential catastrophic errors.
+
+IntentSpec solves this by moving from estimation to verification, from ambiguity to constraint-based interaction.

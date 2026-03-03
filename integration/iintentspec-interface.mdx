@@ -1,0 +1,150 @@
+---
+title: IIntentSpec Interface
+description: Solidity interface for exposing Intent Spec metadata URIs onchain
+---
+
+The `IIntentSpec` interface allows smart contracts to expose their Intent Spec metadata URI onchain, enabling agents to discover and verify contract semantics before interacting.
+
+## Interface Definition
+
+The interface is minimal by design—a single view function that returns a URI pointing to the contract's `intentspec.json` file:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+/// @title IIntentSpec
+/// @notice Interface for contracts that expose their Intent Spec metadata URI (e.g. IPFS hash).
+interface IIntentSpec {
+    /// @notice Returns the URI where the Intent Spec JSON for this contract is stored.
+    /// @return The URI (e.g. ipfs://Qm... or https://...) pointing to the intentspec.json.
+    function getIntentSpecURI() external view returns (string memory);
+}
+```
+
+## Implementation
+
+To integrate Intent Spec into your contract:
+
+1. **Generate your Intent Spec JSON** using the CLI (see [compile command](/cli/compile-command))
+2. **Publish the JSON** to IPFS or another permanent storage (see [Publishing Metadata](publishing-metadata))
+3. **Implement the interface** in your contract
+
+### Basic Implementation
+
+```solidity
+import "./IIntentSpec.sol";
+
+contract MyDeFiProtocol is IIntentSpec {
+    // Store the URI as an immutable variable for gas efficiency
+    string private constant INTENT_SPEC_URI = "ipfs://QmYourHashHere";
+
+    function getIntentSpecURI() external pure override returns (string memory) {
+        return INTENT_SPEC_URI;
+    }
+
+    // ... rest of your contract
+}
+```
+
+### Upgradeable Implementation
+
+For upgradeable contracts where the spec may change between versions:
+
+```solidity
+import "./IIntentSpec.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
+contract UpgradeableProtocol is IIntentSpec, OwnableUpgradeable {
+    string private intentSpecURI;
+
+    event IntentSpecURIUpdated(string newURI);
+
+    function initialize(string memory _initialURI) public initializer {
+        __Ownable_init();
+        intentSpecURI = _initialURI;
+    }
+
+    function getIntentSpecURI() external view override returns (string memory) {
+        return intentSpecURI;
+    }
+
+    function setIntentSpecURI(string memory _newURI) external onlyOwner {
+        intentSpecURI = _newURI;
+        emit IntentSpecURIUpdated(_newURI);
+    }
+}
+```
+
+## URI Formats
+
+The returned URI can use any scheme that agents can resolve:
+
+- **IPFS** (recommended): `ipfs://Qm...` or `ipfs://bafybei...`
+- **HTTPS**: `https://metadata.myproject.com/intentspec.json`
+- **Arweave**: `ar://...`
+- **Data URI** (for small specs): `data:application/json;base64,...`
+
+**Best practice**: Use IPFS for immutability and decentralization. Content-addressed storage ensures the spec matches the hash.
+
+## Real-World Example
+
+Here's how the UserProxy example contract could implement the interface:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "./IIntentSpec.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+/**
+ * @custom:agent-version 1.0
+ * @custom:agent-description Proxy contract for user operations; only owner or designated user can execute.
+ * @custom:agent-invariant owner and user are set at construction and immutable.
+ */
+contract UserProxy is IIntentSpec {
+    address public immutable owner;
+    address public immutable user;
+    
+    // Intent Spec metadata URI
+    string private constant INTENT_SPEC_URI = "ipfs://QmUserProxyIntentSpecHash";
+
+    function getIntentSpecURI() external pure override returns (string memory) {
+        return INTENT_SPEC_URI;
+    }
+
+    constructor(address _owner, address _user) {
+        owner = _owner;
+        user = _user;
+    }
+
+    /**
+     * @custom:agent-intent Execute an arbitrary call to a target contract; may approve ERC20 if needed.
+     * @custom:agent-precondition Caller is owner or user.
+     * @custom:agent-risk External call can perform any action; validate target and data off-chain.
+     */
+    function exec(address target, bytes calldata data, address token, uint256 amount) external {
+        // implementation
+    }
+
+    // ... rest of contract
+}
+```
+
+## Gas Considerations
+
+- **Immutable/constant storage**: Most gas-efficient for fixed metadata (200 gas for SLOAD)
+- **Mutable storage**: Required for upgradeable contracts (~2,100 gas for warm SLOAD)
+- **Hardcoded return**: Most efficient but prevents updates without contract redeployment
+
+For production contracts, use `constant` or `immutable` string storage pointing to an IPFS hash. This provides:
+- Low gas cost for agents querying the URI
+- Immutability guarantees matching your deployed bytecode
+- Decentralized, permanent storage
+
+## Next Steps
+
+- [Publishing Metadata](publishing-metadata) - Learn how to upload your Intent Spec to IPFS
+- [Agent Discovery](agent-discovery) - Understand how agents use this interface
+- [CLI Overview](/cli/overview) - Create Intent Spec JSON from your Solidity code

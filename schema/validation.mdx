@@ -1,0 +1,253 @@
+---
+title: Validation
+description: How to validate IntentSpec JSON output
+---
+
+## Overview
+
+IntentSpec provides JSON Schema-based validation to ensure that generated output conforms to the expected structure. This page explains how to validate your IntentSpec JSON files.
+
+## Schema Location
+
+The IntentSpec JSON schema is available at:
+
+- **Local**: `schema/intentspec.schema.json` in the repository
+- **Remote**: `https://intentspec.collinsadi.xyz/v1/intentspec.schema.json`
+
+## Validation Methods
+
+### Using Node.js (Ajv)
+
+The recommended validation library is [Ajv](https://ajv.js.org/), a fast JSON Schema validator.
+
+#### Installation
+
+```bash
+npm install ajv
+```
+
+#### Validation Script
+
+```javascript
+import Ajv from "ajv";
+import { readFileSync } from "fs";
+
+// Load schema and data
+const schema = JSON.parse(readFileSync("schema/intentspec.schema.json", "utf-8"));
+const data = JSON.parse(readFileSync("output.json", "utf-8"));
+
+// Create validator
+const ajv = new Ajv();
+const validate = ajv.compile(schema);
+
+// Validate
+const valid = validate(data);
+
+if (valid) {
+  console.log("✓ Valid IntentSpec JSON");
+} else {
+  console.error("✗ Validation errors:");
+  console.error(validate.errors);
+  process.exit(1);
+}
+```
+
+#### Example Error Output
+
+```javascript
+[
+  {
+    instancePath: '/functions/0',
+    schemaPath: '#/properties/functions/items/required',
+    keyword: 'required',
+    params: { missingProperty: 'intent' },
+    message: "must have required property 'intent'"
+  }
+]
+```
+
+### Using Python (jsonschema)
+
+#### Installation
+
+```bash
+pip install jsonschema
+```
+
+#### Validation Script
+
+```python
+import json
+from jsonschema import validate, ValidationError
+
+# Load schema and data
+with open("schema/intentspec.schema.json") as f:
+    schema = json.load(f)
+
+with open("output.json") as f:
+    data = json.load(f)
+
+# Validate
+try:
+    validate(instance=data, schema=schema)
+    print("✓ Valid IntentSpec JSON")
+except ValidationError as e:
+    print("✗ Validation error:")
+    print(e.message)
+    exit(1)
+```
+
+### Using CLI Tools
+
+#### ajv-cli
+
+```bash
+npm install -g ajv-cli
+ajv validate -s schema/intentspec.schema.json -d output.json
+```
+
+#### check-jsonschema
+
+```bash
+pip install check-jsonschema
+check-jsonschema --schemafile schema/intentspec.schema.json output.json
+```
+
+## Common Validation Errors
+
+### Missing Required Fields
+
+```json
+{
+  "error": "must have required property 'contract'"
+}
+```
+
+**Solution**: Ensure top-level `contract` and `functions` fields are present.
+
+### Missing Function Intent
+
+```json
+{
+  "error": "must have required property 'intent'",
+  "path": "/functions/0"
+}
+```
+
+**Solution**: Every function must have an `intent` field.
+
+### Invalid Function Signature Format
+
+```json
+{
+  "error": "must match pattern",
+  "path": "/functions/0/signature"
+}
+```
+
+**Solution**: Function selectors must be in format `0x` + 8 hex characters (e.g., `0x1cff79cd`).
+
+### Wrong Data Types
+
+```json
+{
+  "error": "must be array",
+  "path": "/functions/0/preconditions"
+}
+```
+
+**Solution**: Fields like `preconditions`, `effects`, and `risks` must be arrays of strings.
+
+## Validation in TypeScript
+
+IntentSpec includes TypeScript interfaces that align with the JSON schema in `cli/src/natspec.ts`:
+
+```typescript
+export interface IntentSpec {
+  contract: IntentSpecContract;
+  functions: IntentSpecFunction[];
+  events?: IntentSpecEvent[];
+  invariants?: string[];
+}
+
+export interface IntentSpecContract {
+  name: string;
+  version?: string;
+  description?: string;
+}
+
+export interface IntentSpecFunction {
+  name: string;
+  signature?: string;
+  intent: string;
+  preconditions?: string[];
+  effects?: string[];
+  risks?: string[];
+  agentGuidance?: string;
+}
+
+export interface IntentSpecEvent {
+  name: string;
+  description?: string;
+}
+```
+
+These types provide compile-time validation when working with IntentSpec data in TypeScript:
+
+```typescript
+import type { IntentSpec } from "./natspec.js";
+
+const spec: IntentSpec = {
+  contract: {
+    name: "MyContract"
+    // TypeScript will error if required fields are missing
+  },
+  functions: [
+    {
+      name: "myFunction",
+      intent: "Does something important"
+    }
+  ]
+};
+```
+
+## Automated Validation
+
+Consider adding validation to your workflow:
+
+### Pre-commit Hook
+
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit
+
+for file in output/*.json; do
+  ajv validate -s schema/intentspec.schema.json -d "$file" || exit 1
+done
+```
+
+### CI/CD Pipeline
+
+```yaml
+# .github/workflows/validate.yml
+name: Validate IntentSpec
+
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+      - run: npm install -g ajv-cli
+      - run: ajv validate -s schema/intentspec.schema.json -d "output/*.json"
+```
+
+## Best Practices
+
+1. **Validate early**: Run validation immediately after extraction
+2. **Automate**: Include validation in CI/CD pipelines
+3. **Type safety**: Use TypeScript interfaces for compile-time checks
+4. **Clear errors**: Log validation errors with file paths and line numbers
+5. **Version pinning**: Reference specific schema versions in production
